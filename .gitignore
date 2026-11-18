@@ -1,0 +1,17 @@
+# Java: käännetyt tiedostot
+*.class
+out/
+
+# C# / .NET: käännöksen tulokset
+bin/
+obj/
+.vs/
+
+# SQLite-tietokanta ja sen apu­tiedostot
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Windowsin apu­tiedostot
+Thumbs.db
