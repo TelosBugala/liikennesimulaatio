@@ -11,9 +11,8 @@ public class Simulation {
 
     public Simulation(CityMap map) {
         this.map = map;
-        cars.add(new Car(1, 6, 2, Direction.EAST, 3));  // hidas
-        cars.add(new Car(2, 0, 2, Direction.EAST, 1));  // nopea
-        cars.add(new Car(3, 10, 2, Direction.EAST, 1)); // nopea
+        cars.add(new Car(1, 3, 2, Direction.EAST, 5));   // hidas auto seisoo risteyksessä
+        cars.add(new Car(2, 3, 0, Direction.SOUTH, 1));  // nopea auto tulee ylhäältä
     }
 
     public void step() {
