@@ -69,6 +69,8 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Repositorio on yksityinen.** Nimi `liikennesimulaatio` on tarkoituksella suomeksi.
 - **Auto liikkuu yhden ruudun per tick (ei sulavaa liikettä).** Kartan reunalla auto kiertää toiselle puolelle, väliaikainen ratkaisu.
 - **Nopeus on kokonaisluku tickeinä (liikkuu joka N:s tick).** Autot käsitellään listan järjestyksessä, mikä voi jättää jonoon pieniä rakoja, ja korjaus tehdään tarvittaessa myöhemmin.”
+- **Kadut ovat toistaiseksi yksisuuntaisia (vaaka itään, pysty etelään), ja autot ajavat vain suoraan.** Kaksisuuntaisuus, satunnaiset käännökset sekä kartalta poistuminen ja uusien autojen syntyminen reunoilla tehdään myöhemmin.
+
 ## Ajaminen
 
 Palvelu:
@@ -94,7 +96,8 @@ Valmista:
 
 - C#-palvelu: `POST /events`, `GET /events`, SQLite-tallennus
 - Java: ikkuna, joka piirtää kaupungin ruudukon (12 × 9 ruutua, kartta tekstirivinä)
-- Java: kolme autoa samalla tiellä, autoilla eri nopeus (moveEveryTicks). Auto liikkuu vain, jos edessä oleva ruutu on vapaa, mistä syntyy jono.
+- Java: autot samalla tiellä, autoilla eri nopeus (moveEveryTicks). Auto liikkuu vain, jos edessä oleva ruutu on vapaa, mistä syntyy jono. (tässä versiossa ei ole autoja peräkkäin tätä näyttämään))
+- Java: autoja sekä vaakatiellä (itään) että pystytiellä (etelään). Autot kohtaavat risteyksissä, ja isOccupied päästää vain yhden kerrallaan.
 
 ## Seuraavat vaiheet
 
