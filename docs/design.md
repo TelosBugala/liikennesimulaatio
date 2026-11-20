@@ -71,6 +71,7 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Nopeus on kokonaisluku tickeinä (liikkuu joka N:s tick).** Autot käsitellään listan järjestyksessä, mikä voi jättää jonoon pieniä rakoja, ja korjaus tehdään tarvittaessa myöhemmin.”
 - **Kadut ovat toistaiseksi yksisuuntaisia (vaaka itään, pysty etelään), ja autot ajavat vain suoraan.** Kaksisuuntaisuus, satunnaiset käännökset sekä kartalta poistuminen ja uusien autojen syntyminen reunoilla tehdään myöhemmin.
 - **Valoilla ei ole omaa tilaa, vaan vaihe lasketaan tickistä Kaikki valot ovat samassa tahdissa. Valot luodaan kartan +-ruuduista.**
+- **Simulaatio ei tiedä tapahtumien käsittelystä. Se kutsuu konstruktorissa annettua Consumer<PassEvent>-kuuntelijaa.** joten vaiheessa 5 vaihdetaan vain kuuntelija. Tapahtuma syntyy, kun auto saapuu pisteen ruutuun. Pisteet ovat toistaiseksi kovakoodattuina Simulation.createPoints()-metodissa.
 
 ## Ajaminen
 
@@ -97,15 +98,15 @@ Valmista:
 
 - C#-palvelu: `POST /events`, `GET /events`, SQLite-tallennus
 - Java: ikkuna, joka piirtää kaupungin ruudukon (12 × 9 ruutua, kartta tekstirivinä)
-- Java: autot samalla tiellä, autoilla eri nopeus (moveEveryTicks). Auto liikkuu vain, jos edessä oleva ruutu on vapaa, mistä syntyy jono. (tässä versiossa ei ole autoja peräkkäin tätä näyttämään))
+- Java: autot samalla tiellä, autoilla eri nopeus (moveEveryTicks). Auto liikkuu vain, jos edessä oleva ruutu on vapaa, mistä syntyy jono.
 - Java: autoja sekä vaakatiellä (itään) että pystytiellä (etelään). Autot kohtaavat risteyksissä, ja isOccupied päästää vain yhden kerrallaan.
 - Java: liikennevalot kaikissa +-risteyksissä (TrafficLight). Valon tila lasketaan tickistä (tick % 48): vaaka vihreä 20 tickiä, kaikki punaisella 4, pysty vihreä 20, kaikki punaisella 4. Auto odottaa ruudussa ennen risteystä, jos valo on punainen.
 - Java: valot piirretään risteysruudun reunaan, vaakasuunnan valo vasempaan ja pystysuunnan yläreunaan. Väri tulee samasta allows-kutsusta kuin auton liikkumissääntö.
+- Java: kolme mittauspistettä (MeasurementPoint). Kun auto siirtyy pisteen ruutuun, syntyy PassEvent (tick, pointId, carId, direction), joka annetaan simulaation kuuntelijalle. Main tulostaa tapahtumat konsoliin.
 
 ## Seuraavat vaiheet
 
-1. Mittauspiste tulostaa tapahtumia konsoliin
-2. Tapahtumat lähetetään palvelulle ja tallentuvat tietokantaan
+1. Tapahtumat lähetetään palvelulle ja tallentuvat tietokantaan
 
 ## Jätetty myöhemmäksi
 

@@ -2,17 +2,22 @@ package traffic;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class Simulation {
 
     private final CityMap map;
+    private final Consumer<PassEvent> eventListener;
     private final List<Car> cars = new ArrayList<>();
     private final List<TrafficLight> lights = new ArrayList<>();
+    private final List<MeasurementPoint> points = new ArrayList<>();
     private long tick = 0;
 
-    public Simulation(CityMap map) {
+    public Simulation(CityMap map, Consumer<PassEvent> eventListener) {
         this.map = map;
+        this.eventListener = eventListener;
         createLights();
+        createPoints();
         // Vaakatie (rivi 2), itään
         cars.add(new Car(1, 6, 2, Direction.EAST, 3));  // hidas
         cars.add(new Car(2, 0, 2, Direction.EAST, 1));  // nopea
@@ -31,6 +36,12 @@ public class Simulation {
         }
     }
 
+    private void createPoints() {
+        points.add(new MeasurementPoint(1, 1, 2));
+        points.add(new MeasurementPoint(2, 10, 2));
+        points.add(new MeasurementPoint(3, 3, 4));
+    }
+
     public void step() {
         tick++;
         for (Car car : cars) {
@@ -44,6 +55,16 @@ public class Simulation {
             }
             if (!isOccupied(nextX, nextY)) {
                 car.moveTo(nextX, nextY);
+                reportPassings(car);
+            }
+        }
+    }
+
+    private void reportPassings(Car car) {
+        for (MeasurementPoint point : points) {
+            if (point.x() == car.x() && point.y() == car.y()) {
+                eventListener.accept(
+                    new PassEvent(tick, point.id(), car.id(), car.direction()));
             }
         }
     }
