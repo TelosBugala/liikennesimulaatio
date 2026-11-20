@@ -10,6 +10,7 @@ public class CityPanel extends JPanel {
     private static final int TILE_SIZE = 48;
     private static final int CAR_LENGTH = 36;
     private static final int CAR_WIDTH = 20;
+    private static final int LIGHT_SIZE = 6;
 
     private final Simulation simulation;
 
@@ -25,6 +26,7 @@ public class CityPanel extends JPanel {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         drawMap(g);
+        drawLights(g);
         for (Car car : simulation.cars()) {
             drawCar(g, car);
         }
@@ -38,6 +40,28 @@ public class CityPanel extends JPanel {
                 g.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
             }
         }
+    }
+
+    private void drawLights(Graphics g) {
+        long tick = simulation.tick();
+        for (TrafficLight light : simulation.lights()) {
+            int left = light.x() * TILE_SIZE;
+            int top = light.y() * TILE_SIZE;
+
+            // Vaakasuunnan valo: ruudun vasen reuna, keskellä pystysuunnassa
+            g.setColor(lightColor(light.allows(Direction.EAST, tick)));
+            g.fillRect(left, top + (TILE_SIZE - LIGHT_SIZE) / 2,
+                       LIGHT_SIZE, LIGHT_SIZE);
+
+            // Pystysuunnan valo: ruudun yläreuna, keskellä vaakasuunnassa
+            g.setColor(lightColor(light.allows(Direction.SOUTH, tick)));
+            g.fillRect(left + (TILE_SIZE - LIGHT_SIZE) / 2, top,
+                       LIGHT_SIZE, LIGHT_SIZE);
+        }
+    }
+
+    private Color lightColor(boolean green) {
+        return green ? new Color(0, 220, 0) : new Color(230, 0, 0);
     }
 
     private void drawCar(Graphics g, Car car) {

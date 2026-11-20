@@ -100,12 +100,12 @@ Valmista:
 - Java: autot samalla tiellä, autoilla eri nopeus (moveEveryTicks). Auto liikkuu vain, jos edessä oleva ruutu on vapaa, mistä syntyy jono. (tässä versiossa ei ole autoja peräkkäin tätä näyttämään))
 - Java: autoja sekä vaakatiellä (itään) että pystytiellä (etelään). Autot kohtaavat risteyksissä, ja isOccupied päästää vain yhden kerrallaan.
 - Java: liikennevalot kaikissa +-risteyksissä (TrafficLight). Valon tila lasketaan tickistä (tick % 48): vaaka vihreä 20 tickiä, kaikki punaisella 4, pysty vihreä 20, kaikki punaisella 4. Auto odottaa ruudussa ennen risteystä, jos valo on punainen.
+- Java: valot piirretään risteysruudun reunaan, vaakasuunnan valo vasempaan ja pystysuunnan yläreunaan. Väri tulee samasta allows-kutsusta kuin auton liikkumissääntö.
 
 ## Seuraavat vaiheet
 
-1. Risteykset ja liikennevalot (piirtäminen vielä tekemättä)
-2. Mittauspiste tulostaa tapahtumia konsoliin
-3. Tapahtumat lähetetään palvelulle ja tallentuvat tietokantaan
+1. Mittauspiste tulostaa tapahtumia konsoliin
+2. Tapahtumat lähetetään palvelulle ja tallentuvat tietokantaan
 
 ## Jätetty myöhemmäksi
 
