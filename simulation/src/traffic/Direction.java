@@ -9,8 +9,13 @@ public enum Direction {
     public final int dx;
     public final int dy;
 
+    public boolean isHorizontal() {
+        return this == EAST || this == WEST;
+    }
+    
     Direction(int dx, int dy) {
         this.dx = dx;
         this.dy = dy;
     }
 }
+
