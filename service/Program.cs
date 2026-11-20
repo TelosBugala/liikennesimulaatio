@@ -1,7 +1,5 @@
 using Microsoft.Data.Sqlite;
 
-using Microsoft.Data.Sqlite;
-
 const string connectionString = "Data Source=traffic.db";
 
 InitializeDatabase(connectionString);
@@ -35,6 +33,36 @@ app.MapPost("/events", (EventDto e) =>
     return Results.Created("/events", e);
 });
 
+app.MapGet("/events", () =>
+{
+    var events = new List<StoredEvent>();
+
+    using var connection = new SqliteConnection(connectionString);
+    connection.Open();
+
+    using var command = connection.CreateCommand();
+    command.CommandText = """
+        SELECT id, tick, point_id, car_id, direction, received_at
+        FROM events
+        ORDER BY id DESC
+        LIMIT 100;
+        """;
+
+    using var reader = command.ExecuteReader();
+    while (reader.Read())
+    {
+        events.Add(new StoredEvent(
+            reader.GetInt32(0),
+            reader.GetInt32(1),
+            reader.GetInt32(2),
+            reader.GetInt32(3),
+            reader.GetString(4),
+            reader.GetString(5)));
+    }
+
+    return Results.Ok(events);
+});
+
 app.Run();
 
 static void InitializeDatabase(string connectionString)
@@ -57,3 +85,4 @@ static void InitializeDatabase(string connectionString)
 }
 
 record EventDto(int Tick, int PointId, int CarId, string Direction);
+record StoredEvent(int Id, int Tick, int PointId, int CarId, string Direction, string ReceivedAt);
