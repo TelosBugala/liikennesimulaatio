@@ -13,3 +13,11 @@ C#-palvelu tallentaa SQLite-tietokantaan.
 ## Tila
 
 Suunnitteluvaihe. Kaikki toimii paikallisesti.
+
+## Palvelun ajaminen
+
+    cd service
+    dotnet run
+
+Palvelu kuuntelee osoitteessa `http://localhost:5256`. Jos portti on
+varattu, vaihda se tiedostossa `service/Properties/launchSettings.json`.
