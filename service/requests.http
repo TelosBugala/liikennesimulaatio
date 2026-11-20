@@ -1,0 +1,11 @@
+### Valid event
+POST http://localhost:5256/events
+Content-Type: application/json
+
+{ "tick": 1042, "pointId": 3, "carId": 17, "direction": "NORTH" }
+
+### Invalid direction (should return 400)
+POST http://localhost:5256/events
+Content-Type: application/json
+
+{ "tick": 1043, "pointId": 3, "carId": 18, "direction": "UP" }
