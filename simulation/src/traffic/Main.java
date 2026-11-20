@@ -14,7 +14,11 @@ public class Main {
 
     private static void createWindow() {
         CityMap map = CityMap.createDefault();
-        Simulation simulation = new Simulation(map, System.out::println);
+        EventSender sender = new EventSender();
+        Simulation simulation = new Simulation(map, event -> {
+            System.out.println(event);
+            sender.send(event);
+        });
         CityPanel panel = new CityPanel(simulation);
 
         JFrame frame = new JFrame("Traffic simulation");

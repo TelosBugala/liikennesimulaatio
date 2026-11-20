@@ -72,6 +72,7 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Kadut ovat toistaiseksi yksisuuntaisia (vaaka itään, pysty etelään), ja autot ajavat vain suoraan.** Kaksisuuntaisuus, satunnaiset käännökset sekä kartalta poistuminen ja uusien autojen syntyminen reunoilla tehdään myöhemmin.
 - **Valoilla ei ole omaa tilaa, vaan vaihe lasketaan tickistä Kaikki valot ovat samassa tahdissa. Valot luodaan kartan +-ruuduista.**
 - **Simulaatio ei tiedä tapahtumien käsittelystä. Se kutsuu konstruktorissa annettua Consumer<PassEvent>-kuuntelijaa.** joten vaiheessa 5 vaihdetaan vain kuuntelija. Tapahtuma syntyy, kun auto saapuu pisteen ruutuun. Pisteet ovat toistaiseksi kovakoodattuina Simulation.createPoints()-metodissa.
+- **Lähetys on asynkronista (sendAsync), jotta hidas tai poissa oleva palvelu ei pysäytä simulaatiota. Yksi pyyntö per tapahtuma. JSON kirjoitetaan käsin. Epäonnistunut lähetys kirjataan System.erriin eikä sitä yritetä uudelleen.**
 
 ## Ajaminen
 
@@ -103,10 +104,11 @@ Valmista:
 - Java: liikennevalot kaikissa +-risteyksissä (TrafficLight). Valon tila lasketaan tickistä (tick % 48): vaaka vihreä 20 tickiä, kaikki punaisella 4, pysty vihreä 20, kaikki punaisella 4. Auto odottaa ruudussa ennen risteystä, jos valo on punainen.
 - Java: valot piirretään risteysruudun reunaan, vaakasuunnan valo vasempaan ja pystysuunnan yläreunaan. Väri tulee samasta allows-kutsusta kuin auton liikkumissääntö.
 - Java: kolme mittauspistettä (MeasurementPoint). Kun auto siirtyy pisteen ruutuun, syntyy PassEvent (tick, pointId, carId, direction), joka annetaan simulaation kuuntelijalle. Main tulostaa tapahtumat konsoliin.
+- Java: EventSender lähettää jokaisen PassEventin palvelulle HTTP POST -pyynnöllä (java.net.http.HttpClient). Tapahtumat tallentuvat tietokantaan.
 
 ## Seuraavat vaiheet
 
-1. Tapahtumat lähetetään palvelulle ja tallentuvat tietokantaan
+Alkuperäinen vaihelista on tehty loppuun.
 
 ## Jätetty myöhemmäksi
 
