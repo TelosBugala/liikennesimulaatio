@@ -21,11 +21,13 @@ public class CityPanel extends JPanel {
             map.height() * TILE_SIZE));
     }
 
-    @Override
+     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         drawMap(g);
-        drawCar(g);
+        for (Car car : simulation.cars()) {
+            drawCar(g, car);
+        }
     }
 
     private void drawMap(Graphics g) {
@@ -38,15 +40,14 @@ public class CityPanel extends JPanel {
         }
     }
 
-    private void drawCar(Graphics g) {
-        Car car = simulation.car();
+    private void drawCar(Graphics g, Car car) {
         boolean horizontal = car.direction() == Direction.EAST
                           || car.direction() == Direction.WEST;
         int w = horizontal ? CAR_LENGTH : CAR_WIDTH;
         int h = horizontal ? CAR_WIDTH : CAR_LENGTH;
         int px = car.x() * TILE_SIZE + (TILE_SIZE - w) / 2;
         int py = car.y() * TILE_SIZE + (TILE_SIZE - h) / 2;
-        g.setColor(Color.YELLOW);
+        g.setColor(car.moveEveryTicks() > 1 ? Color.RED : Color.YELLOW);
         g.fillRect(px, py, w, h);
     }
 

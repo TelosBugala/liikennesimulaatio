@@ -68,7 +68,7 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Kartta ja piirto erillään.** `CityMap` kuvaa kartan tietona, `CityPanel` piirtää sen.
 - **Repositorio on yksityinen.** Nimi `liikennesimulaatio` on tarkoituksella suomeksi.
 - **Auto liikkuu yhden ruudun per tick (ei sulavaa liikettä).** Kartan reunalla auto kiertää toiselle puolelle, väliaikainen ratkaisu.
-
+- **Nopeus on kokonaisluku tickeinä (liikkuu joka N:s tick).** Autot käsitellään listan järjestyksessä, mikä voi jättää jonoon pieniä rakoja, ja korjaus tehdään tarvittaessa myöhemmin.”
 ## Ajaminen
 
 Palvelu:
@@ -94,14 +94,13 @@ Valmista:
 
 - C#-palvelu: `POST /events`, `GET /events`, SQLite-tallennus
 - Java: ikkuna, joka piirtää kaupungin ruudukon (12 × 9 ruutua, kartta tekstirivinä)
-- Java: yksi auto ajaa vaakatietä itään, ajastin (200 ms) kutsuu Simulation.step()-metodia, joka on yksi tick.
+- Java: kolme autoa samalla tiellä, autoilla eri nopeus (moveEveryTicks). Auto liikkuu vain, jos edessä oleva ruutu on vapaa, mistä syntyy jono.
 
 ## Seuraavat vaiheet
 
-1. Useampi auto, jono ja pysähtyminen edellä olevan taakse
-2. Risteykset ja liikennevalot
-3. Mittauspiste tulostaa tapahtumia konsoliin
-4. Tapahtumat lähetetään palvelulle ja tallentuvat tietokantaan
+1. Risteykset ja liikennevalot
+2. Mittauspiste tulostaa tapahtumia konsoliin
+3. Tapahtumat lähetetään palvelulle ja tallentuvat tietokantaan
 
 ## Jätetty myöhemmäksi
 

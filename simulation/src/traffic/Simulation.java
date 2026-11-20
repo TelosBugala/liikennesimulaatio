@@ -1,25 +1,45 @@
 package traffic;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class Simulation {
 
     private final CityMap map;
-    private final Car car;
+    private final List<Car> cars = new ArrayList<>();
     private long tick = 0;
 
     public Simulation(CityMap map) {
         this.map = map;
-        this.car = new Car(1, 0, 2, Direction.EAST);
+        cars.add(new Car(1, 6, 2, Direction.EAST, 3));  // hidas
+        cars.add(new Car(2, 0, 2, Direction.EAST, 1));  // nopea
+        cars.add(new Car(3, 10, 2, Direction.EAST, 1)); // nopea
     }
 
     public void step() {
         tick++;
-        car.advance();
-        car.setPosition(
-            Math.floorMod(car.x(), map.width()),
-            Math.floorMod(car.y(), map.height()));
+        for (Car car : cars) {
+            if (!car.isDue(tick)) {
+                continue;
+            }
+            int nextX = Math.floorMod(car.x() + car.direction().dx, map.width());
+            int nextY = Math.floorMod(car.y() + car.direction().dy, map.height());
+            if (!isOccupied(nextX, nextY)) {
+                car.moveTo(nextX, nextY);
+            }
+        }
+    }
+
+    private boolean isOccupied(int x, int y) {
+        for (Car other : cars) {
+            if (other.x() == x && other.y() == y) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public CityMap map() { return map; }
-    public Car car() { return car; }
+    public List<Car> cars() { return cars; }
     public long tick() { return tick; }
 }
