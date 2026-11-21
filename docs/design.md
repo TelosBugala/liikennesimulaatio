@@ -34,7 +34,7 @@ Kansiossa `simulation/src/traffic/`:
 | `CityMap` | Kartta tietona (merkkirivit) ja tiesäännöt (isInside, roadAllows)|
 | `CityPanel` | Piirtää kartan, valot ja autot |
 | `Simulation` | Maailman tila: autot, valot, mittauspisteet ja syntymispisteet. step() on yksi tick: autojen liike ja uuden auton syntyminen |
-| `Car` | Auton sijainti, suunta ja nopeus |
+| `Car` | Auton sijainti, viimeisin ajosuunta, nopeus ja reitti (lista suuntia) |
 | `Direction` | Neljä pääsuuntaa (enum) |
 | `TrafficLight` | Risteyksen valo. Tila lasketaan tickistä |
 | `MeasurementPoint` | Mittauspiste (tunniste ja ruutu) |
@@ -98,15 +98,15 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 
 ### Liikenne
 
-- **Autot syntyvät kartan reunoilla ja poistuvat toisessa päässä.** Syntymispisteet löytyvät kartasta automaattisesti: reunalla oleva tieruutu, jonka suunta on reunasta sisäänpäin (nykyisellä kartalla kahdeksan). Syntymisväli on satunnainen (5–20 tickiä), piste arvotaan, ja jos kaista on varattu, syntyminen odottaa seuraavaan tickiin. Auto poistetaan, kun sen seuraava ruutu olisi kartan ulkopuolella. Jokainen auto saa juoksevan tunnisteen.
+- **Autot syntyvät kartan reunoilla ja poistuvat määränpäässään.** Syntymispisteet löytyvät kartasta automaattisesti: reunalla oleva tieruutu, jonka suunta on reunasta sisäänpäin (nykyisellä kartalla kahdeksan). Syntymisväli on satunnainen (5–20 tickiä), piste arvotaan, ja jos kaista on varattu, syntyminen odottaa seuraavaan tickiin. Auto poistuu, kun se on ajanut reittinsä loppuun. Jokainen auto saa juoksevan tunnisteen."
 - **Liikenne on oikeanpuoleista.** Auto piirretään ajosuuntansa oikealle puolelle (siirtymä `LANE_OFFSET`), ja kaistojen välissä on katkoviiva.
 - **Varaus tehdään ruudun ja suunnan parina.** Tavallisella tieruudulla auto estää vain samaan suuntaan ajavan auton, joten vastakkaiset suunnat eivät häiritse toisiaan. Risteysruudussa (`+`) on kerrallaan vain yksi auto.
 - **Auto liikkuu vain, jos seuraava ruutu on vapaa.** Jono ja pysähtyminen syntyvät tästä yhdestä säännöstä. Autot käsitellään listan järjestyksessä, mikä voi jättää jonoon pieniä rakoja, ja korjaus tehdään tarvittaessa myöhemmin.
-- **Älä tuki risteystä.** Auto ajaa risteykseen vain, jos risteyksen jälkeinen ruutu on vapaa.
+- **Älä tuki risteystä.** Auto ajaa risteykseen vain, jos ruutu, johon se risteyksestä jatkaa (reitin mukaan), on vapaa.
 - **Valoilla ei ole omaa tilaa.** Vaihe lasketaan tickistä (`tick % 48`): vaaka vihreä 20 tickiä, kaikki punaisella 4, pysty vihreä 20, kaikki punaisella 4. Kaikki valot ovat samassa tahdissa, ja ne luodaan kartan `+`-ruuduista. Auto odottaa ruudussa ennen risteystä, jos sen suunnan valo on punainen. Piirto ja liikkumissääntö käyttävät samaa `allows`-kutsua.
 - **Valot piirretään risteyksen kaikkiin neljään reunaan.** Vasen ja oikea reuna näyttävät vaakasuunnan värin ja ylä- ja alareuna pystysuunnan värin. `TrafficLight` erottelee vain vaaka- ja pystysuunnan.
+- **Auto saa reitin syntyessään.** Määränpää on jokin muu syntymispiste, ja reitti lasketaan kerran RoutePlannerilla. Reittiä ei muuteta kesken matkan, eikä auto väistä ruuhkaa. Käännökset tulevat reitistä. Auton direction on viimeisin ajosuunta, ja käännös näkyy kaistan vaihtumisena risteyksen jälkeen.
 - **Reitti on lista suuntia.** RoutePlanner etsii lyhimmän reitin leveyshaulla (BFS) ja palauttaa suuntalistan. Naapureiden järjestys arvotaan joka haulla, joten samanpituisista reiteistä valitaan satunnainen. Reitittömyys palautetaan arvona null.
-
 
 ### Tapahtumat ja yhteys palveluun
 
@@ -119,7 +119,6 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 
 ## Suunnitellut ratkaisut (päätetty, ei vielä toteutettu)
 
-- **Reitinhaku.** Auto saa reitin (ruutulistan) kerran syntyessään ja seuraa sitä. Reitti haetaan leveyshaulla (BFS), joka löytää lyhimmän reitin. Käännökset määräytyvät reitistä, joten satunnaisia käännöksiä ei tehdä. Auto ei väistä ruuhkaa eikä vaihda reittiä kesken matkan.
 - **Mittauspisteet kaksikaistaisella tiellä.** Piste on yksi ruutu, ja se havaitsee molempien suuntien autot. Suunta kulkee mukana tapahtumassa (`direction`).
 - **Jumiutumisriski.** Kun autoja on paljon, ne voivat jonottaa ristiin niin, ettei kukaan pääse liikkeelle. Valot ja rajoitettu syntymisväli vähentävät riskiä. Jos jumiutumista esiintyy, se ratkaistaan silloin.
 
@@ -127,7 +126,6 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 
 Nämä ovat käytössä nyt ja korvataan seuraavien vaiheiden aikana:
 
-- **Autot ajavat vain suoraan risteyksissä.** Korvautuu reitinhaulla (vaihe 2).
 - **Mittauspisteet on kovakoodattu `Simulation.createPoints()`-metodiin eikä niitä piirretä.** Piirto tulee vaiheessa 4, ja lisäys ja poisto hiirellä tulee myöhemmin.
 
 ## Ajaminen
@@ -146,8 +144,7 @@ cd simulation
 javac -d out -sourcepath src src/traffic/Main.java
 java -cp out traffic.Main
 ```
-
-Reitit voi tulostaa konsoliin käynnistämällä simulaation asetuksella -Dtraffic.debug=true (PowerShellissä lainausmerkkien kanssa).
+Asetuksella -Dtraffic.debug=true (PowerShellissä lainausmerkkien kanssa) konsoliin tulostetaan jokaisen syntyvän auton reitti.
 
 Palvelun käsin testaus: `service/requests.http` (VS Coden REST Client -lisäosa).
 
@@ -183,14 +180,13 @@ Valmista:
 - Java: kolme mittauspistettä, jotka tuottavat `PassEvent`-tapahtuman, kun auto saapuu pisteen ruutuun
 - Java: `EventSender` lähettää tapahtumat palvelulle, ja ne tallentuvat tietokantaan. Koko ketju Java → HTTP → C# → SQLite toimii
 - Java: kaksikaistaiset tiet. Autoja ajaa kaikkiin neljään suuntaan, kaistat on piirretty katkoviivalla.
-- Java: autot syntyvät satunnaisesti kartan reunoilla, ajavat suoraan ja poistuvat toisessa päässä.
+- Java: autot syntyvät reunoilla, saavat satunnaisen määränpään ja lyhimmän reitin (RoutePlanner, leveyshaku) ja kääntyvät risteyksissä reitin mukaan.
 
 ## Seuraavat vaiheet
 
 Simulaation täydentäminen valmiiksi (kukin vaihe kokeillaan ja commitoidaan erikseen):
 
-2. **Reitinhaku ja käännökset.** Auto saa reitin ja seuraa sitä myös risteyksissä kääntyen.
-3. *Tehty ennen vaihetta 2: syntyminen ja katoaminen reunoilla.*
+Vaiheet 1–3 on tehty.
 4. **Mittauspisteiden piirto.** Pisteet näkyvät kartalla.
 
 Sen jälkeen:

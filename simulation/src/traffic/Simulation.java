@@ -32,9 +32,6 @@ public class Simulation {
         createLights();
         createPoints();
         createSpawnPoints();
-        if (DEBUG) {
-            printSampleRoutes();
-        }
         ticksUntilSpawn = nextSpawnDelay();
     }
 
@@ -65,21 +62,6 @@ public class Simulation {
         }
     }
 
-    private void printSampleRoutes() {
-        if (spawnPoints.isEmpty()) {
-            return;
-        }
-        SpawnPoint from = spawnPoints.get(0);
-        for (SpawnPoint to : spawnPoints) {
-            if (to == from) {
-                continue;
-            }
-            List<Direction> route = planner.plan(from.x(), from.y(), to.x(), to.y());
-            System.out.println("Route (" + from.x() + "," + from.y() + ") -> ("
-                + to.x() + "," + to.y() + "): " + RoutePlanner.describe(route));
-        }
-    }
-
     private Direction inwardDirectionAt(int x, int y) {
         if (x == 0) return Direction.EAST;
         if (x == map.width() - 1) return Direction.WEST;
@@ -101,17 +83,17 @@ public class Simulation {
             if (!car.isDue(tick)) {
                 continue;
             }
-            Direction direction = car.direction();
-            int nextX = car.x() + direction.dx;
-            int nextY = car.y() + direction.dy;
-            if (!map.isInside(nextX, nextY)) {
+            if (car.hasArrived()) {
                 iterator.remove();
                 continue;
             }
+            Direction direction = car.nextDirection();
+            int nextX = car.x() + direction.dx;
+            int nextY = car.y() + direction.dy;
             if (isRedLightAt(nextX, nextY, direction)) {
                 continue;
             }
-            if (wouldBlockIntersection(nextX, nextY, direction)) {
+            if (wouldBlockIntersection(car, nextX, nextY)) {
                 continue;
             }
             if (!isOccupied(nextX, nextY, direction)) {
@@ -123,16 +105,36 @@ public class Simulation {
 
     private void spawnCar() {
         ticksUntilSpawn--;
-        if (ticksUntilSpawn > 0 || spawnPoints.isEmpty()) {
+        if (ticksUntilSpawn > 0 || spawnPoints.size() < 2) {
             return;
         }
-        SpawnPoint spawn = spawnPoints.get(random.nextInt(spawnPoints.size()));
+        int spawnIndex = random.nextInt(spawnPoints.size());
+        SpawnPoint spawn = spawnPoints.get(spawnIndex);
         if (isOccupied(spawn.x(), spawn.y(), spawn.direction())) {
             return; // yritetään uudelleen seuraavalla tickillä
         }
+
+        // Määränpää: jokin muu syntymispiste
+        int goalIndex = random.nextInt(spawnPoints.size() - 1);
+        if (goalIndex >= spawnIndex) {
+            goalIndex++;
+        }
+        SpawnPoint goal = spawnPoints.get(goalIndex);
+
+        List<Direction> route = planner.plan(spawn.x(), spawn.y(), goal.x(), goal.y());
+        if (route == null) {
+            return; // reittiä ei ole, yritetään uudelleen
+        }
+
         int moveEveryTicks = 1 + random.nextInt(MAX_MOVE_EVERY_TICKS);
-        cars.add(new Car(nextCarId++, spawn.x(), spawn.y(),
-                         spawn.direction(), moveEveryTicks));
+        Car car = new Car(nextCarId++, spawn.x(), spawn.y(),
+                          spawn.direction(), moveEveryTicks, route);
+        cars.add(car);
+        if (DEBUG) {
+            System.out.println("Car " + car.id() + ": (" + spawn.x() + "," + spawn.y()
+                + ") -> (" + goal.x() + "," + goal.y() + "): "
+                + RoutePlanner.describe(route));
+        }
         ticksUntilSpawn = nextSpawnDelay();
     }
 
@@ -158,16 +160,15 @@ public class Simulation {
         return false;
     }
 
-    private boolean wouldBlockIntersection(int x, int y, Direction direction) {
+    private boolean wouldBlockIntersection(Car car, int x, int y) {
         if (map.tileAt(x, y) != '+') {
             return false;
         }
-        int afterX = x + direction.dx;
-        int afterY = y + direction.dy;
-        if (!map.isInside(afterX, afterY)) {
+        Direction exit = car.directionAfterNext();
+        if (exit == null) {
             return false;
         }
-        return isOccupied(afterX, afterY, direction);
+        return isOccupied(x + exit.dx, y + exit.dy, exit);
     }
 
     private boolean isOccupied(int x, int y, Direction direction) {
