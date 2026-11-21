@@ -2,6 +2,7 @@ package traffic;
 
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.Graphics;
 import javax.swing.JPanel;
 
@@ -12,6 +13,8 @@ public class CityPanel extends JPanel {
     private static final int CAR_WIDTH = 20;
     private static final int LIGHT_SIZE = 6;
     private static final int LANE_OFFSET = TILE_SIZE / 4;
+    private static final int POINT_LINE_THICKNESS = 4;
+    private static final Color POINT_COLOR = new Color(0, 200, 255);
 
     private final Simulation simulation;
 
@@ -27,6 +30,7 @@ public class CityPanel extends JPanel {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         drawMap(g);
+        drawMeasurementPoints(g);
         drawLights(g);
         for (Car car : simulation.cars()) {
             drawCar(g, car);
@@ -57,6 +61,32 @@ public class CityPanel extends JPanel {
         } else if (tile == '|') {
             g.fillRect(left + (TILE_SIZE - thick) / 2,
                        top + (TILE_SIZE - dash) / 2, thick, dash);
+        }
+    }
+
+    private void drawMeasurementPoints(Graphics g) {
+        CityMap map = simulation.map();
+        int line = POINT_LINE_THICKNESS;
+        g.setFont(g.getFont().deriveFont(Font.BOLD, 11f));
+        for (MeasurementPoint point : simulation.points()) {
+            int left = point.x() * TILE_SIZE;
+            int top = point.y() * TILE_SIZE;
+            char tile = map.tileAt(point.x(), point.y());
+
+            g.setColor(POINT_COLOR);
+            if (tile == '-') {
+                // Vaakatie: pystysuora viiva tien poikki
+                g.fillRect(left + (TILE_SIZE - line) / 2, top, line, TILE_SIZE);
+            } else if (tile == '|') {
+                // Pystytie: vaakasuora viiva tien poikki
+                g.fillRect(left, top + (TILE_SIZE - line) / 2, TILE_SIZE, line);
+            } else {
+                // Risteys tai muu ruutu: kehys ruudun reunaan
+                g.drawRect(left + 1, top + 1, TILE_SIZE - 3, TILE_SIZE - 3);
+            }
+
+            g.setColor(Color.WHITE);
+            g.drawString(String.valueOf(point.id()), left + 3, top + 12);
         }
     }
 

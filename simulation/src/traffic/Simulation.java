@@ -185,5 +185,6 @@ public class Simulation {
     public CityMap map() { return map; }
     public List<Car> cars() { return cars; }
     public List<TrafficLight> lights() { return lights; }
+    public List<MeasurementPoint> points() { return points; }
     public long tick() { return tick; }
 }

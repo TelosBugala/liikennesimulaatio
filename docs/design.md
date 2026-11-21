@@ -32,7 +32,7 @@ Kansiossa `simulation/src/traffic/`:
 |---|---|
 | `Main` | Käynnistää ikkunan ja ajastimen (tick 200 ms), kytkee tapahtumakuuntelijan |
 | `CityMap` | Kartta tietona (merkkirivit) ja tiesäännöt (isInside, roadAllows)|
-| `CityPanel` | Piirtää kartan, valot ja autot |
+| `CityPanel` | Piirtää kartan, mittauspisteet, valot ja auto |
 | `Simulation` | Maailman tila: autot, valot, mittauspisteet ja syntymispisteet. step() on yksi tick: autojen liike ja uuden auton syntyminen |
 | `Car` | Auton sijainti, viimeisin ajosuunta, nopeus ja reitti (lista suuntia) |
 | `Direction` | Neljä pääsuuntaa (enum) |
@@ -107,6 +107,7 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Valot piirretään risteyksen kaikkiin neljään reunaan.** Vasen ja oikea reuna näyttävät vaakasuunnan värin ja ylä- ja alareuna pystysuunnan värin. `TrafficLight` erottelee vain vaaka- ja pystysuunnan.
 - **Auto saa reitin syntyessään.** Määränpää on jokin muu syntymispiste, ja reitti lasketaan kerran RoutePlannerilla. Reittiä ei muuteta kesken matkan, eikä auto väistä ruuhkaa. Käännökset tulevat reitistä. Auton direction on viimeisin ajosuunta, ja käännös näkyy kaistan vaihtumisena risteyksen jälkeen.
 - **Reitti on lista suuntia.** RoutePlanner etsii lyhimmän reitin leveyshaulla (BFS) ja palauttaa suuntalistan. Naapureiden järjestys arvotaan joka haulla, joten samanpituisista reiteistä valitaan satunnainen. Reitittömyys palautetaan arvona null.
+- **Mittauspiste piirretään viivana tien poikki.** Viiva on ruudun keskellä, ja se kattaa molemmat kaistat. Pisteen tunniste näkyy numerona ruudun kulmassa. Risteykseen tai muulle ruudulle asetettu piste piirretään kehyksenä. Piirto lukee pisteet simulaatiolta joka kerta, joten myöhemmin lisättävät ja poistettavat pisteet näkyvät automaattisesti.
 
 ### Tapahtumat ja yhteys palveluun
 
@@ -126,7 +127,7 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 
 Nämä ovat käytössä nyt ja korvataan seuraavien vaiheiden aikana:
 
-- **Mittauspisteet on kovakoodattu `Simulation.createPoints()`-metodiin eikä niitä piirretä.** Piirto tulee vaiheessa 4, ja lisäys ja poisto hiirellä tulee myöhemmin.
+- **Mittauspisteet on kovakoodattu `Simulation.createPoints()`-metodiin** Korvautuu myöhemmin lisäyksellä ja poistolla hiirellä (vaihe 5)."
 
 ## Ajaminen
 
@@ -181,13 +182,13 @@ Valmista:
 - Java: `EventSender` lähettää tapahtumat palvelulle, ja ne tallentuvat tietokantaan. Koko ketju Java → HTTP → C# → SQLite toimii
 - Java: kaksikaistaiset tiet. Autoja ajaa kaikkiin neljään suuntaan, kaistat on piirretty katkoviivalla.
 - Java: autot syntyvät reunoilla, saavat satunnaisen määränpään ja lyhimmän reitin (RoutePlanner, leveyshaku) ja kääntyvät risteyksissä reitin mukaan.
+- Java: mittauspisteet piirretään kartalle.
 
 ## Seuraavat vaiheet
 
 Simulaation täydentäminen valmiiksi (kukin vaihe kokeillaan ja commitoidaan erikseen):
 
-Vaiheet 1–3 on tehty.
-4. **Mittauspisteiden piirto.** Pisteet näkyvät kartalla.
+Vaiheet 1–4 on tehty (kaksikaistaiset tiet, reitinhaku, syntyminen ja katoaminen reunoilla ja mittauspisteiden piirto). Simulaation perusosa on valmis.
 
 Sen jälkeen:
 
