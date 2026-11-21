@@ -31,16 +31,16 @@ Kansiossa `simulation/src/traffic/`:
 | Luokka | Tehtävä |
 |---|---|
 | `Main` | Käynnistää ikkunan ja ajastimen (tick 200 ms), kytkee tapahtumakuuntelijan |
-| `CityMap` | Kartta tietona (merkkirivit) |
+| `CityMap` | Kartta tietona (merkkirivit) ja tiesäännöt (isInside, roadAllows)|
 | `CityPanel` | Piirtää kartan, valot ja autot |
-| `Simulation` | Maailman tila: autot, valot, mittauspisteet ja tick. `step()` on yksi tick |
+| `Simulation` | Maailman tila: autot, valot, mittauspisteet ja syntymispisteet. step() on yksi tick: autojen liike ja uuden auton syntyminen |
 | `Car` | Auton sijainti, suunta ja nopeus |
 | `Direction` | Neljä pääsuuntaa (enum) |
 | `TrafficLight` | Risteyksen valo. Tila lasketaan tickistä |
 | `MeasurementPoint` | Mittauspiste (tunniste ja ruutu) |
 | `PassEvent` | Tapahtuma: tick, pointId, carId, direction |
 | `EventSender` | Lähettää tapahtuman palvelulle HTTP POST -pyynnöllä (osoite annetaan konstruktorissa) |
-
+| `SpawnPointr` | Syntymispiste: ruutu ja ajosuunta |
 
 ## Rajapinta
 
@@ -78,29 +78,45 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 
 ## Tehdyt päätökset
 
-Toteutettu ja voimassa:
+### Yleiset
 
 - **Pieni ensimmäinen versio.** Uusia ominaisuuksia ei lisätä ennen kuin niiden tarve on perusteltu ja päätetty.
 - **Ei Mavenia vielä.** Javassa käytetään pelkkää `javac`ia, kunnes tarvitaan ulkopuolisia kirjastoja.
+
+### Tallennus ja rajapinta
+
 - **Raakaa SQL:ää, ei Entity Frameworkia.** Pidetään tallennus näkyvänä ja yksinkertaisena. SQL-lauseet käyttävät parametreja (ei merkkijonojen liittämistä) SQL-injektion estämiseksi.
 - **Tick tallennetaan, simuloitu kellonaika (`sim_time`) lisätään myöhemmin.** Tietokanta on kertakäyttöinen, joten sarakkeen lisääminen on helppoa tarpeen tullen.
 - **Suunnalle ei ole oletusarvoa.** Puuttuva suunta on virhe, jonka halutaan näkyä heti.
+
+### Simulaation rakenne
+
 - **Kartta ja piirto erillään.** `CityMap` kuvaa kartan tietona, `Simulation` pitää kirjaa maailman tilasta ja `CityPanel` piirtää sen.
 - **Auto liikkuu yhden ruudun per tick.** Liike on hyppäys ruudulta toiselle (ei sulavaa liikettä), joten mittauspisteen ylitys on helppo havaita. Tickin pituus on 200 ms (`TICK_MILLIS` tiedostossa `Main.java`).
-- **Nopeus on kokonaisluku tickeinä.** Auto liikkuu joka N:s tick (`moveEveryTicks`).
-- **Auto liikkuu vain, jos seuraava ruutu on vapaa.** Jono ja pysähtyminen syntyvät tästä yhdestä säännöstä. Autot käsitellään listan järjestyksessä, mikä voi jättää jonoon pieniä rakoja, ja korjaus tehdään tarvittaessa myöhemmin.
-- **Valoilla ei ole omaa tilaa.** Vaihe lasketaan tickistä (`tick % 48`): vaaka vihreä 20 tickiä, kaikki punaisella 4, pysty vihreä 20, kaikki punaisella 4. Kaikki valot ovat samassa tahdissa, ja ne luodaan kartan `+`-ruuduista. Auto odottaa ruudussa ennen risteystä, jos sen suunnan valo on punainen. Piirto ja liikkumissääntö käyttävät samaa `allows`-kutsua.
-- **Varaus tehdään ruudun ja suunnan parina.** Tavallisella tieruudulla auto estää vain samaan suuntaan ajavan auton, joten vastakkaiset suunnat eivät häiritse toisiaan. Risteysruudussa (`+`) on kerrallaan vain yksi auto
+- **Nopeus on kokonaisluku tickeinä.** Auto liikkuu joka N:s tick (`moveEveryTicks`). Arvo arvotaan auton syntyessä: auto liikkuu joka, joka toinen tai joka kolmas tick.
+
+### Liikenne
+
+- **Autot syntyvät kartan reunoilla ja poistuvat toisessa päässä.** Syntymispisteet löytyvät kartasta automaattisesti: reunalla oleva tieruutu, jonka suunta on reunasta sisäänpäin (nykyisellä kartalla kahdeksan). Syntymisväli on satunnainen (5–20 tickiä), piste arvotaan, ja jos kaista on varattu, syntyminen odottaa seuraavaan tickiin. Auto poistetaan, kun sen seuraava ruutu olisi kartan ulkopuolella. Jokainen auto saa juoksevan tunnisteen.
 - **Liikenne on oikeanpuoleista.** Auto piirretään ajosuuntansa oikealle puolelle (siirtymä `LANE_OFFSET`), ja kaistojen välissä on katkoviiva.
+- **Varaus tehdään ruudun ja suunnan parina.** Tavallisella tieruudulla auto estää vain samaan suuntaan ajavan auton, joten vastakkaiset suunnat eivät häiritse toisiaan. Risteysruudussa (`+`) on kerrallaan vain yksi auto.
+- **Auto liikkuu vain, jos seuraava ruutu on vapaa.** Jono ja pysähtyminen syntyvät tästä yhdestä säännöstä. Autot käsitellään listan järjestyksessä, mikä voi jättää jonoon pieniä rakoja, ja korjaus tehdään tarvittaessa myöhemmin.
+- **Älä tuki risteystä.** Auto ajaa risteykseen vain, jos risteyksen jälkeinen ruutu on vapaa.
+- **Valoilla ei ole omaa tilaa.** Vaihe lasketaan tickistä (`tick % 48`): vaaka vihreä 20 tickiä, kaikki punaisella 4, pysty vihreä 20, kaikki punaisella 4. Kaikki valot ovat samassa tahdissa, ja ne luodaan kartan `+`-ruuduista. Auto odottaa ruudussa ennen risteystä, jos sen suunnan valo on punainen. Piirto ja liikkumissääntö käyttävät samaa `allows`-kutsua.
 - **Valot piirretään risteyksen kaikkiin neljään reunaan.** Vasen ja oikea reuna näyttävät vaakasuunnan värin ja ylä- ja alareuna pystysuunnan värin. `TrafficLight` erottelee vain vaaka- ja pystysuunnan.
+
+### Tapahtumat ja yhteys palveluun
+
 - **Simulaatio ei tiedä tapahtumien käsittelystä.** Se kutsuu konstruktorissa annettua `Consumer<PassEvent>`-kuuntelijaa. Tapahtuma syntyy, kun auto saapuu mittauspisteen ruutuun.
 - **Lähetys on asynkronista (`sendAsync`).** Hidas tai poissa oleva palvelu ei pysäytä simulaatiota. Yksi pyyntö per tapahtuma, JSON kirjoitetaan käsin. Epäonnistunut lähetys kirjataan `System.err`iin, eikä sitä yritetä uudelleen.
-- **Palvelun osoite on Main.javassa oletusarvona (DEFAULT_SERVICE_URL), ja sen voi ohittaa asetuksella -Dtraffic.serviceUrl=.... .**Simulaatio ei lue palvelun launchSettings.jsonia, koska se on dotnet run -kehityskäytön tiedosto eikä osa rajapintaa.”
+- **Palvelun osoite on `Main.java`ssa oletusarvona (`DEFAULT_SERVICE_URL`), ja sen voi ohittaa asetuksella `-Dtraffic.serviceUrl=...`.** Simulaatio ei lue palvelun `launchSettings.json`ia, koska se on `dotnet run` -kehityskäytön tiedosto eikä osa rajapintaa.
+
+
+
 
 ## Suunnitellut ratkaisut (päätetty, ei vielä toteutettu)
 
 - **Reitinhaku.** Auto saa reitin (ruutulistan) kerran syntyessään ja seuraa sitä. Reitti haetaan leveyshaulla (BFS), joka löytää lyhimmän reitin. Käännökset määräytyvät reitistä, joten satunnaisia käännöksiä ei tehdä. Auto ei väistä ruuhkaa eikä vaihda reittiä kesken matkan.
-- **Syntyminen ja katoaminen.** Kartan tiet jatkuvat reunalle kahdeksassa kohdassa (vaakateiden ja pystyteiden päät). Autoja syntyy satunnaisin väliajoin (aluksi noin 5–20 tickiä) satunnaiselle reunatielle A, ja loppupiste B valitaan satunnaisesti toiseksi reunatieksi. Jos syntymisruutu on varattu, auto odottaa seuraavaan tickiin. Auto katoaa, kun se poistuu kartalta pisteessä B.
 - **Mittauspisteet kaksikaistaisella tiellä.** Piste on yksi ruutu, ja se havaitsee molempien suuntien autot. Suunta kulkee mukana tapahtumassa (`direction`).
 - **Jumiutumisriski.** Kun autoja on paljon, ne voivat jonottaa ristiin niin, ettei kukaan pääse liikkeelle. Valot ja rajoitettu syntymisväli vähentävät riskiä. Jos jumiutumista esiintyy, se ratkaistaan silloin.
 
@@ -109,8 +125,6 @@ Toteutettu ja voimassa:
 Nämä ovat käytössä nyt ja korvataan seuraavien vaiheiden aikana:
 
 - **Autot ajavat vain suoraan risteyksissä.** Korvautuu reitinhaulla (vaihe 2).
-- **Kartan reunalla auto kiertää toiselle puolelle.** Korvautuu syntymisellä ja katoamisella (vaihe 3).
-- **Autot on kovakoodattu `Simulation`in konstruktoriin.** Korvautuu satunnaisella syntymisellä (vaihe 3).
 - **Mittauspisteet on kovakoodattu `Simulation.createPoints()`-metodiin eikä niitä piirretä.** Piirto tulee vaiheessa 4, ja lisäys ja poisto hiirellä tulee myöhemmin.
 
 ## Ajaminen
@@ -164,13 +178,14 @@ Valmista:
 - Java: kolme mittauspistettä, jotka tuottavat `PassEvent`-tapahtuman, kun auto saapuu pisteen ruutuun
 - Java: `EventSender` lähettää tapahtumat palvelulle, ja ne tallentuvat tietokantaan. Koko ketju Java → HTTP → C# → SQLite toimii
 - Java: kaksikaistaiset tiet. Autoja ajaa kaikkiin neljään suuntaan, kaistat on piirretty katkoviivalla.
+- Java: autot syntyvät satunnaisesti kartan reunoilla, ajavat suoraan ja poistuvat toisessa päässä.
 
 ## Seuraavat vaiheet
 
 Simulaation täydentäminen valmiiksi (kukin vaihe kokeillaan ja commitoidaan erikseen):
 
 2. **Reitinhaku ja käännökset.** Auto saa reitin ja seuraa sitä myös risteyksissä kääntyen.
-3. **Syntyminen ja katoaminen reunoilla.** Kiertäminen reunasta ympäri poistuu.
+3. *Tehty ennen vaihetta 2: syntyminen ja katoaminen reunoilla.*
 4. **Mittauspisteiden piirto.** Pisteet näkyvät kartalla.
 
 Sen jälkeen:
