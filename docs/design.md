@@ -39,7 +39,8 @@ Kansiossa `simulation/src/traffic/`:
 | `TrafficLight` | Risteyksen valo. Tila lasketaan tickistä |
 | `MeasurementPoint` | Mittauspiste (tunniste ja ruutu) |
 | `PassEvent` | Tapahtuma: tick, pointId, carId, direction |
-| `EventSender` | Lähettää tapahtuman palvelulle HTTP POST -pyynnöllä |
+| `EventSender` | Lähettää tapahtuman palvelulle HTTP POST -pyynnöllä (osoite annetaan konstruktorissa) |
+
 
 ## Rajapinta
 
@@ -91,6 +92,7 @@ Toteutettu ja voimassa:
 - **Valoilla ei ole omaa tilaa.** Vaihe lasketaan tickistä (`tick % 48`): vaaka vihreä 20 tickiä, kaikki punaisella 4, pysty vihreä 20, kaikki punaisella 4. Kaikki valot ovat samassa tahdissa, ja ne luodaan kartan `+`-ruuduista. Auto odottaa ruudussa ennen risteystä, jos sen suunnan valo on punainen. Piirto ja liikkumissääntö käyttävät samaa `allows`-kutsua.
 - **Simulaatio ei tiedä tapahtumien käsittelystä.** Se kutsuu konstruktorissa annettua `Consumer<PassEvent>`-kuuntelijaa. Tapahtuma syntyy, kun auto saapuu mittauspisteen ruutuun.
 - **Lähetys on asynkronista (`sendAsync`).** Hidas tai poissa oleva palvelu ei pysäytä simulaatiota. Yksi pyyntö per tapahtuma, JSON kirjoitetaan käsin. Epäonnistunut lähetys kirjataan `System.err`iin, eikä sitä yritetä uudelleen.
+- **Palvelun osoite on Main.javassa oletusarvona (DEFAULT_SERVICE_URL), ja sen voi ohittaa asetuksella -Dtraffic.serviceUrl=.... .**Simulaatio ei lue palvelun launchSettings.jsonia, koska se on dotnet run -kehityskäytön tiedosto eikä osa rajapintaa.”
 
 ## Suunnitellut ratkaisut (päätetty, ei vielä toteutettu)
 
@@ -128,6 +130,26 @@ java -cp out traffic.Main
 ```
 
 Palvelun käsin testaus: `service/requests.http` (VS Coden REST Client -lisäosa).
+
+### Portin vaihtaminen
+
+Palvelun oletusportti on 5256 (tiedosto `service/Properties/launchSettings.json`), ja simulaatio käyttää samaa oletusta (`DEFAULT_SERVICE_URL` tiedostossa `Main.java`). Jos portti on jo käytössä, käynnistä molemmat samalla uudella portilla. Esimerkki portilla 5300:
+
+Palvelu:
+
+```
+cd service
+dotnet run --urls http://localhost:5300
+```
+
+Simulaatio:
+
+```
+cd simulation
+java "-Dtraffic.serviceUrl=http://localhost:5300" -cp out traffic.Main
+```
+
+Molempien osoitteiden pitää täsmätä. Jos simulaatio ei saa yhteyttä, konsoliin tulostuu virhe, jossa näkyy osoite, johon se yritti yhdistää.
 
 ## Tila
 

@@ -7,6 +7,7 @@ import javax.swing.Timer;
 public class Main {
 
     private static final int TICK_MILLIS = 200;
+    private static final String DEFAULT_SERVICE_URL = "http://localhost:5256"
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(Main::createWindow);
@@ -14,7 +15,8 @@ public class Main {
 
     private static void createWindow() {
         CityMap map = CityMap.createDefault();
-        EventSender sender = new EventSender();
+        String serviceUrl = System.getProperty("traffic.serviceUrl", DEFAULT_SERVICE_URL);
+        EventSender sender = new EventSender(serviceUrl);
         Simulation simulation = new Simulation(map, event -> {
             System.out.println(event);
             sender.send(event);
