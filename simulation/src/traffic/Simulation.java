@@ -11,10 +11,12 @@ public class Simulation {
     private static final int MIN_SPAWN_DELAY = 5;
     private static final int MAX_SPAWN_DELAY = 20;
     private static final int MAX_MOVE_EVERY_TICKS = 3;
+    private static final boolean DEBUG = Boolean.getBoolean("traffic.debug");
 
     private final CityMap map;
     private final Consumer<PassEvent> eventListener;
     private final Random random = new Random();
+    private final RoutePlanner planner;
     private final List<Car> cars = new ArrayList<>();
     private final List<TrafficLight> lights = new ArrayList<>();
     private final List<MeasurementPoint> points = new ArrayList<>();
@@ -26,9 +28,13 @@ public class Simulation {
     public Simulation(CityMap map, Consumer<PassEvent> eventListener) {
         this.map = map;
         this.eventListener = eventListener;
+        this.planner = new RoutePlanner(map, random);
         createLights();
         createPoints();
         createSpawnPoints();
+        if (DEBUG) {
+            printSampleRoutes();
+        }
         ticksUntilSpawn = nextSpawnDelay();
     }
 
@@ -56,6 +62,21 @@ public class Simulation {
                     spawnPoints.add(new SpawnPoint(x, y, inward));
                 }
             }
+        }
+    }
+
+    private void printSampleRoutes() {
+        if (spawnPoints.isEmpty()) {
+            return;
+        }
+        SpawnPoint from = spawnPoints.get(0);
+        for (SpawnPoint to : spawnPoints) {
+            if (to == from) {
+                continue;
+            }
+            List<Direction> route = planner.plan(from.x(), from.y(), to.x(), to.y());
+            System.out.println("Route (" + from.x() + "," + from.y() + ") -> ("
+                + to.x() + "," + to.y() + "): " + RoutePlanner.describe(route));
         }
     }
 

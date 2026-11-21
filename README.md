@@ -44,6 +44,8 @@ Simulaatio (toisessa terminaalissa):
 Palvelu kuuntelee oletuksena osoitteessa `http://localhost:5256`, ja
 simulaatio lähettää tapahtumat sinne.
 
+Reitit voi tulostaa konsoliin käynnistämällä simulaation asetuksella -Dtraffic.debug=true (PowerShellissä lainausmerkkien kanssa).
+
 ## Portin vaihtaminen
 
 Jos portti on varattu, käynnistä molemmat samalla uudella portilla.

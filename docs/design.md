@@ -41,6 +41,7 @@ Kansiossa `simulation/src/traffic/`:
 | `PassEvent` | Tapahtuma: tick, pointId, carId, direction |
 | `EventSender` | Lähettää tapahtuman palvelulle HTTP POST -pyynnöllä (osoite annetaan konstruktorissa) |
 | `SpawnPointr` | Syntymispiste: ruutu ja ajosuunta |
+| `RoutePlanner` | Laskee lyhimmän reitin kahden ruudun välillä leveyshaulla. Palauttaa suuntalistan. Tasapelit ratkaistaan arpomalla. |
 
 ## Rajapinta
 
@@ -104,6 +105,8 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Älä tuki risteystä.** Auto ajaa risteykseen vain, jos risteyksen jälkeinen ruutu on vapaa.
 - **Valoilla ei ole omaa tilaa.** Vaihe lasketaan tickistä (`tick % 48`): vaaka vihreä 20 tickiä, kaikki punaisella 4, pysty vihreä 20, kaikki punaisella 4. Kaikki valot ovat samassa tahdissa, ja ne luodaan kartan `+`-ruuduista. Auto odottaa ruudussa ennen risteystä, jos sen suunnan valo on punainen. Piirto ja liikkumissääntö käyttävät samaa `allows`-kutsua.
 - **Valot piirretään risteyksen kaikkiin neljään reunaan.** Vasen ja oikea reuna näyttävät vaakasuunnan värin ja ylä- ja alareuna pystysuunnan värin. `TrafficLight` erottelee vain vaaka- ja pystysuunnan.
+- **Reitti on lista suuntia.** RoutePlanner etsii lyhimmän reitin leveyshaulla (BFS) ja palauttaa suuntalistan. Naapureiden järjestys arvotaan joka haulla, joten samanpituisista reiteistä valitaan satunnainen. Reitittömyys palautetaan arvona null.
+
 
 ### Tapahtumat ja yhteys palveluun
 
@@ -143,6 +146,8 @@ cd simulation
 javac -d out -sourcepath src src/traffic/Main.java
 java -cp out traffic.Main
 ```
+
+Reitit voi tulostaa konsoliin käynnistämällä simulaation asetuksella -Dtraffic.debug=true (PowerShellissä lainausmerkkien kanssa).
 
 Palvelun käsin testaus: `service/requests.http` (VS Coden REST Client -lisäosa).
 
