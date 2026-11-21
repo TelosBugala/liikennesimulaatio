@@ -90,13 +90,15 @@ Toteutettu ja voimassa:
 - **Nopeus on kokonaisluku tickeinä.** Auto liikkuu joka N:s tick (`moveEveryTicks`).
 - **Auto liikkuu vain, jos seuraava ruutu on vapaa.** Jono ja pysähtyminen syntyvät tästä yhdestä säännöstä. Autot käsitellään listan järjestyksessä, mikä voi jättää jonoon pieniä rakoja, ja korjaus tehdään tarvittaessa myöhemmin.
 - **Valoilla ei ole omaa tilaa.** Vaihe lasketaan tickistä (`tick % 48`): vaaka vihreä 20 tickiä, kaikki punaisella 4, pysty vihreä 20, kaikki punaisella 4. Kaikki valot ovat samassa tahdissa, ja ne luodaan kartan `+`-ruuduista. Auto odottaa ruudussa ennen risteystä, jos sen suunnan valo on punainen. Piirto ja liikkumissääntö käyttävät samaa `allows`-kutsua.
+- **Varaus tehdään ruudun ja suunnan parina.** Tavallisella tieruudulla auto estää vain samaan suuntaan ajavan auton, joten vastakkaiset suunnat eivät häiritse toisiaan. Risteysruudussa (`+`) on kerrallaan vain yksi auto
+- **Liikenne on oikeanpuoleista.** Auto piirretään ajosuuntansa oikealle puolelle (siirtymä `LANE_OFFSET`), ja kaistojen välissä on katkoviiva.
+- **Valot piirretään risteyksen kaikkiin neljään reunaan.** Vasen ja oikea reuna näyttävät vaakasuunnan värin ja ylä- ja alareuna pystysuunnan värin. `TrafficLight` erottelee vain vaaka- ja pystysuunnan.
 - **Simulaatio ei tiedä tapahtumien käsittelystä.** Se kutsuu konstruktorissa annettua `Consumer<PassEvent>`-kuuntelijaa. Tapahtuma syntyy, kun auto saapuu mittauspisteen ruutuun.
 - **Lähetys on asynkronista (`sendAsync`).** Hidas tai poissa oleva palvelu ei pysäytä simulaatiota. Yksi pyyntö per tapahtuma, JSON kirjoitetaan käsin. Epäonnistunut lähetys kirjataan `System.err`iin, eikä sitä yritetä uudelleen.
 - **Palvelun osoite on Main.javassa oletusarvona (DEFAULT_SERVICE_URL), ja sen voi ohittaa asetuksella -Dtraffic.serviceUrl=.... .**Simulaatio ei lue palvelun launchSettings.jsonia, koska se on dotnet run -kehityskäytön tiedosto eikä osa rajapintaa.”
 
 ## Suunnitellut ratkaisut (päätetty, ei vielä toteutettu)
 
-- **Kaksikaistaiset tiet.** Kartta ei muutu: yksi ruutu mahtuu kaksi kaistaa (ruutu 48 px, auto 20 px leveä). Liikenne on oikeanpuoleista, eli auto ajaa ajosuuntansa oikealla puolella. Varaus tarkistetaan ruudun ja suunnan parina, joten vastakkaiset suunnat eivät häiritse toisiaan. Risteysruudussa on kerrallaan vain yksi auto.
 - **Reitinhaku.** Auto saa reitin (ruutulistan) kerran syntyessään ja seuraa sitä. Reitti haetaan leveyshaulla (BFS), joka löytää lyhimmän reitin. Käännökset määräytyvät reitistä, joten satunnaisia käännöksiä ei tehdä. Auto ei väistä ruuhkaa eikä vaihda reittiä kesken matkan.
 - **Syntyminen ja katoaminen.** Kartan tiet jatkuvat reunalle kahdeksassa kohdassa (vaakateiden ja pystyteiden päät). Autoja syntyy satunnaisin väliajoin (aluksi noin 5–20 tickiä) satunnaiselle reunatielle A, ja loppupiste B valitaan satunnaisesti toiseksi reunatieksi. Jos syntymisruutu on varattu, auto odottaa seuraavaan tickiin. Auto katoaa, kun se poistuu kartalta pisteessä B.
 - **Mittauspisteet kaksikaistaisella tiellä.** Piste on yksi ruutu, ja se havaitsee molempien suuntien autot. Suunta kulkee mukana tapahtumassa (`direction`).
@@ -106,7 +108,6 @@ Toteutettu ja voimassa:
 
 Nämä ovat käytössä nyt ja korvataan seuraavien vaiheiden aikana:
 
-- **Kadut ovat yksisuuntaisia** (vaaka itään, pysty etelään). Korvautuu kaksikaistaisilla teillä (vaihe 1).
 - **Autot ajavat vain suoraan risteyksissä.** Korvautuu reitinhaulla (vaihe 2).
 - **Kartan reunalla auto kiertää toiselle puolelle.** Korvautuu syntymisellä ja katoamisella (vaihe 3).
 - **Autot on kovakoodattu `Simulation`in konstruktoriin.** Korvautuu satunnaisella syntymisellä (vaihe 3).
@@ -162,12 +163,12 @@ Valmista:
 - Java: liikennevalot kaikissa `+`-risteyksissä, piirretty risteysruudun reunaan (vaakasuunnan valo vasempaan, pystysuunnan yläreunaan)
 - Java: kolme mittauspistettä, jotka tuottavat `PassEvent`-tapahtuman, kun auto saapuu pisteen ruutuun
 - Java: `EventSender` lähettää tapahtumat palvelulle, ja ne tallentuvat tietokantaan. Koko ketju Java → HTTP → C# → SQLite toimii
+- Java: kaksikaistaiset tiet. Autoja ajaa kaikkiin neljään suuntaan, kaistat on piirretty katkoviivalla.
 
 ## Seuraavat vaiheet
 
 Simulaation täydentäminen valmiiksi (kukin vaihe kokeillaan ja commitoidaan erikseen):
 
-1. **Kaksikaistaiset tiet.** Autot voivat ajaa kaikkiin suuntiin, ja kaistat piirretään. Autot ajavat vielä suoraan ja kiertävät reunasta ympäri.
 2. **Reitinhaku ja käännökset.** Auto saa reitin ja seuraa sitä myös risteyksissä kääntyen.
 3. **Syntyminen ja katoaminen reunoilla.** Kiertäminen reunasta ympäri poistuu.
 4. **Mittauspisteiden piirto.** Pisteet näkyvät kartalla.

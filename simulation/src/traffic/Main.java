@@ -7,7 +7,7 @@ import javax.swing.Timer;
 public class Main {
 
     private static final int TICK_MILLIS = 200;
-    private static final String DEFAULT_SERVICE_URL = "http://localhost:5256"
+    private static final String DEFAULT_SERVICE_URL = "http://localhost:5256";
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(Main::createWindow);

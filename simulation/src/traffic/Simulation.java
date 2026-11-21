@@ -18,12 +18,18 @@ public class Simulation {
         this.eventListener = eventListener;
         createLights();
         createPoints();
-        // Vaakatie (rivi 2), itään
+        // Vaakatie (rivi 2): itään ja länteen
         cars.add(new Car(1, 6, 2, Direction.EAST, 3));  // hidas
-        cars.add(new Car(2, 0, 2, Direction.EAST, 1));  // nopea
-        // Pystytie (sarake 3), etelään
+        cars.add(new Car(2, 0, 2, Direction.EAST, 1));
+        cars.add(new Car(5, 9, 2, Direction.WEST, 2));
+        // Vaakatie (rivi 6): länteen
+        cars.add(new Car(7, 6, 6, Direction.WEST, 1));
+        // Pystytie (sarake 3): etelään ja pohjoiseen
         cars.add(new Car(3, 3, 0, Direction.SOUTH, 2));
         cars.add(new Car(4, 3, 5, Direction.SOUTH, 1));
+        cars.add(new Car(8, 3, 7, Direction.NORTH, 2));
+        // Pystytie (sarake 8): pohjoiseen
+        cars.add(new Car(6, 8, 7, Direction.NORTH, 1));
     }
 
     private void createLights() {
@@ -53,7 +59,7 @@ public class Simulation {
             if (isRedLightAt(nextX, nextY, car.direction())) {
                 continue;
             }
-            if (!isOccupied(nextX, nextY)) {
+            if (!isOccupied(nextX, nextY, car.direction())) {
                 car.moveTo(nextX, nextY);
                 reportPassings(car);
             }
@@ -78,9 +84,11 @@ public class Simulation {
         return false;
     }
 
-    private boolean isOccupied(int x, int y) {
+    private boolean isOccupied(int x, int y, Direction direction) {
+        boolean intersection = map.tileAt(x, y) == '+';
         for (Car other : cars) {
-            if (other.x() == x && other.y() == y) {
+            if (other.x() == x && other.y() == y
+                    && (intersection || other.direction() == direction)) {
                 return true;
             }
         }
