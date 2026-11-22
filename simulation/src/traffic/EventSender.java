@@ -5,6 +5,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.format.DateTimeFormatter;
 
 public class EventSender {
 
@@ -17,8 +18,12 @@ public class EventSender {
 
     public void send(PassEvent event) {
         String json = String.format(
-            "{ \"tick\": %d, \"pointId\": %d, \"carId\": %d, \"direction\": \"%s\" }",
-            event.tick(), event.pointId(), event.carId(), event.direction().name());
+            "{ \"tick\": %d, \"simTime\": \"%s\", \"pointId\": %d, "
+                + "\"carId\": %d, \"direction\": \"%s\" }",
+            event.tick(),
+            DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(event.simTime()),
+            event.pointId(), event.carId(), event.direction().name());
+        Debug.log("Sending " + json);
 
         HttpRequest request = HttpRequest.newBuilder(eventsUri)
             .timeout(Duration.ofSeconds(2))

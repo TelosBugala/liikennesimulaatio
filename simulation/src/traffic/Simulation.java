@@ -1,5 +1,6 @@
 package traffic;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -11,7 +12,6 @@ public class Simulation {
     private static final int MIN_SPAWN_DELAY = 5;
     private static final int MAX_SPAWN_DELAY = 20;
     private static final int MAX_MOVE_EVERY_TICKS = 3;
-    private static final boolean DEBUG = Boolean.getBoolean("traffic.debug");
 
     private final CityMap map;
     private final Consumer<PassEvent> eventListener;
@@ -130,11 +130,9 @@ public class Simulation {
         Car car = new Car(nextCarId++, spawn.x(), spawn.y(),
                           spawn.direction(), moveEveryTicks, route);
         cars.add(car);
-        if (DEBUG) {
-            System.out.println("Car " + car.id() + ": (" + spawn.x() + "," + spawn.y()
-                + ") -> (" + goal.x() + "," + goal.y() + "): "
-                + RoutePlanner.describe(route));
-        }
+        Debug.log("Car " + car.id() + ": (" + spawn.x() + "," + spawn.y()
+            + ") -> (" + goal.x() + "," + goal.y() + "): "
+            + RoutePlanner.describe(route));
         ticksUntilSpawn = nextSpawnDelay();
     }
 
@@ -145,8 +143,8 @@ public class Simulation {
     private void reportPassings(Car car) {
         for (MeasurementPoint point : points) {
             if (point.x() == car.x() && point.y() == car.y()) {
-                eventListener.accept(
-                    new PassEvent(tick, point.id(), car.id(), car.direction()));
+                 eventListener.accept(new PassEvent(
+                    tick, SimTime.at(tick), point.id(), car.id(), car.direction()));
             }
         }
     }
@@ -187,4 +185,5 @@ public class Simulation {
     public List<TrafficLight> lights() { return lights; }
     public List<MeasurementPoint> points() { return points; }
     public long tick() { return tick; }
+        public LocalDateTime simTime() { return SimTime.at(tick); }
 }

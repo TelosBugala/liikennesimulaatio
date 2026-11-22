@@ -49,10 +49,12 @@ voi kokeilla myös selaimessa osoitteessa `http://localhost:5256/events`.
  
 ## Debug-tulostus
  
-Käynnistämällä simulaation asetuksella `-Dtraffic.debug=true` konsoliin
-tulostetaan jokaisen syntyvän auton reitti. PowerShellissä asetus kirjoitetaan
-lainausmerkkien kanssa:
- 
+Normaalissa ajossa konsoliin tulostuu vain käynnistysrivi (palvelun osoite)
+ja mahdolliset virheet. Käynnistämällä simulaation asetuksella
+`-Dtraffic.debug=true` konsoliin tulostetaan lisäksi jokaisen syntyvän auton
+reitti ja jokainen palvelulle lähetettävä tapahtuma. PowerShellissä asetus
+kirjoitetaan lainausmerkkien kanssa:
+
     java "-Dtraffic.debug=true" -cp out traffic.Main
  
 ## Portin vaihtaminen

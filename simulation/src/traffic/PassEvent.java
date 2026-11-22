@@ -1,4 +1,7 @@
 package traffic;
 
-public record PassEvent(long tick, int pointId, int carId, Direction direction) {
+import java.time.LocalDateTime;
+
+public record PassEvent(long tick, LocalDateTime simTime,
+                        int pointId, int carId, Direction direction) {
 }
