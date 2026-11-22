@@ -15,10 +15,11 @@ Java-simulaatio  --HTTP + JSON-->  C#-palvelu  --SQL-->  SQLite
  
 ## Tila
  
-Työn alla. Koko ketju toimii: autot ajavat kaksikaistaisessa ruudukossa
+Simulaatio on valmis: autot ajavat kaksikaistaisessa ruudukossa
 liikennevaloissa, mittauspisteet tuottavat tapahtumia, ja palvelu tallentaa
-ne tietokantaan. Simulaatiota täydennetään parhaillaan. Tarkempi tila ja
-suunnitelma ovat tiedostossa `docs/design.md`.
+ne tietokantaan. Työn alla on palvelun puoli: tilastot tallennetusta datasta
+ja niiden katselu selaimessa. Tarkempi tila ja suunnitelma ovat tiedostossa
+`docs/design.md`.
  
 Kaikki toimii paikallisesti.
  
@@ -47,14 +48,25 @@ Tiedoston voi ajaa esimerkiksi VS Coden REST Client -lisäosalla tai
 JetBrains-ohjelmistojen ja Visual Studion omalla HTTP-tuella. GET-pyynnön
 voi kokeilla myös selaimessa osoitteessa `http://localhost:5256/events`.
  
+## Käyttö
+ 
+- **Nopeus:** yläpalkin painikkeilla Slower ja Faster simulaation nopeus on
+  0,5x–32x, ja Pause pysäyttää simulaation. Kello näyttää simulaatioajan
+  (yksi tick on 5 sekuntia).
+- **Mittauspisteet:** vasen klikkaus tieruutuun lisää mittauspisteen ja
+  kysyy sen nimen. Vasen klikkaus olemassa olevaan pisteeseen muokkaa nimeä,
+  ja oikea klikkaus poistaa pisteen.
+- **Tallennus:** pisteet tallentuvat tiedostoon `measurement-points.txt`
+  ohjelman käynnistyskansioon (`simulation/`) ja latautuvat käynnistyksessä.
+  Tiedoston poistaminen palauttaa oletuspisteet.
 ## Debug-tulostus
  
-Normaalissa ajossa konsoliin tulostuu vain käynnistysrivi (palvelun osoite)
-ja mahdolliset virheet. Käynnistämällä simulaation asetuksella
-`-Dtraffic.debug=true` konsoliin tulostetaan lisäksi jokaisen syntyvän auton
-reitti ja jokainen palvelulle lähetettävä tapahtuma. PowerShellissä asetus
-kirjoitetaan lainausmerkkien kanssa:
-
+Normaalissa ajossa konsoliin tulostuu vain käynnistysrivit (palvelun osoite
+ja mittauspisteiden tiedosto) ja mahdolliset virheet. Käynnistämällä
+simulaation asetuksella `-Dtraffic.debug=true` konsoliin tulostetaan lisäksi
+jokaisen syntyvän auton reitti ja jokainen palvelulle lähetettävä tapahtuma.
+PowerShellissä asetus kirjoitetaan lainausmerkkien kanssa:
+ 
     java "-Dtraffic.debug=true" -cp out traffic.Main
  
 ## Portin vaihtaminen
@@ -70,3 +82,9 @@ Esimerkki portilla 5300:
  
 Molempien osoitteiden pitää täsmätä. Jos simulaatio ei saa yhteyttä,
 konsoliin tulostuu virhe, jossa näkyy osoite, johon se yritti yhdistää.
+ 
+## Tietokannan nollaus
+ 
+Pysäytä palvelu ja poista tiedostot `service/traffic.db`,
+`service/traffic.db-wal` ja `service/traffic.db-shm`. Palvelu luo uuden
+tietokannan käynnistyessään.

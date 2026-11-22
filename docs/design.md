@@ -6,7 +6,7 @@ Tämä dokumentti kuvaa projektin rakenteen, tehdyt päätökset ja nykytilan. P
  
 Yksinkertainen ruutukaupunkisimulaatio, jossa suorakulmioautot liikkuvat vain neljään pääsuuntaan. Autot syntyvät kartan reunalla olevalle tielle, ajavat valitsemaansa reittiä toiselle reunatielle ja katoavat siellä. Tiet ovat kaksikaistaisia, ja risteyksissä on liikennevalot. Ulkoasun esikuvina ovat C64-peli Traffic ja Police Quest 1:n ajo-osuus. Kun auto ohittaa mittauspisteen, syntyy tapahtuma, jonka C#-palvelu tallentaa SQLite-tietokantaan.
  
-Tavoitteena on myös, että simulaatiolla on oma aika, jonka nopeutta voi säätää, ja että nimettyjä mittauspisteitä voi lisätä ja poistaa ohjelman käydessä (vaihe 5).
+Simulaatiolla on oma aika, jonka nopeutta voi säätää, ja nimettyjä mittauspisteitä voi lisätä, nimetä uudelleen ja poistaa ohjelman käydessä. Tallennetusta datasta lasketaan tilastoja, joita katsellaan palvelun tarjoamalta selainsivulta (vaihe 6).
  
 Kaikki toimii paikallisesti. Pilvipalveluja tai maksullisia palveluja ei käytetä.
  
@@ -24,7 +24,7 @@ Tiedonkulku on yksisuuntainen: simulaatio lähettää tapahtumia, palvelu tallen
 |---|---|---|
 | Simulaatio | `simulation/` | Java 25, Swing, ei Mavenia (käännös `javac`illa) |
 | Palvelu | `service/` | C#, ASP.NET Core minimal API (.NET 10) |
-| Tietokanta | `service/traffic.db (sekä -wal ja -shm)` | SQLite, ei versionhallinnassa |
+| Tietokanta | `service/traffic.db` (sekä `-wal` ja `-shm`) | SQLite, ei versionhallinnassa |
  
 ## Java-luokat
  
@@ -32,11 +32,11 @@ Kansiossa `simulation/src/traffic/`:
  
 | Luokka | Tehtävä |
 |---|---|
-| `Main` | Käynnistää ikkunan (yläpalkki ja kartta), kytkee tapahtumakuuntelijan ja käynnistää SimulationRunnerin |
-| `CityMap` | Kartta tietona (merkkirivit), tiesäännöt (isInside, isRoad, roadAllows) ja ruudun pituus metreinä|
-| `CityPanel` | Piirtää kartan, mittauspisteet, valot, autot ja pisteiden nimet, ja välittää hiiren klikkaukset PointEditorille |
-| `Simulation` | Maailman tila: autot, valot, mittauspisteet ja syntymispisteet. `step()` on yksi tick: autojen liike ja uuden auton syntyminen. Hallinnoi mittauspisteitä (addPoint, renamePoint, removePoint, pointAt) |
-| `Car` | Auton sijainti, viimeisin ajosuunta, nopeus (moveEveryTicks, nimellisnopeus km/h) ja reitti (lista suuntia) |
+| `Main` | Käynnistää ikkunan (yläpalkki ja kartta), lataa mittauspisteet, kytkee tapahtumakuuntelijan ja pisteiden tallennuksen sekä käynnistää `SimulationRunner`in |
+| `CityMap` | Kartta tietona (merkkirivit), tiesäännöt (`isInside`, `isRoad`, `roadAllows`) ja ruudun pituus metreinä |
+| `CityPanel` | Piirtää kartan, mittauspisteet, valot, autot ja pisteiden nimet, ja välittää hiiren klikkaukset `PointEditor`ille |
+| `Simulation` | Maailman tila: autot, valot, mittauspisteet ja syntymispisteet. `step()` on yksi tick: autojen liike ja uuden auton syntyminen. Hallinnoi mittauspisteitä (`addPoint`, `renamePoint`, `removePoint`, `pointAt`, `restorePoints`) ja ilmoittaa niiden muutoksista kuuntelijalle |
+| `Car` | Auton sijainti, viimeisin ajosuunta, nopeus (`moveEveryTicks`, nimellisnopeus km/h) ja reitti (lista suuntia) |
 | `Direction` | Neljä pääsuuntaa (enum) |
 | `TrafficLight` | Risteyksen valo. Tila lasketaan tickistä |
 | `SpawnPoint` | Syntymispiste: ruutu ja ajosuunta |
@@ -44,12 +44,13 @@ Kansiossa `simulation/src/traffic/`:
 | `MeasurementPoint` | Mittauspiste (tunniste, nimi ja ruutu). Nimi validoidaan konstruktorissa |
 | `PassEvent` | Tapahtuma: tick, simTime, pointId, pointName, carId, direction, speedKmh |
 | `EventSender` | Lähettää tapahtuman palvelulle HTTP POST -pyynnöllä (osoite annetaan konstruktorissa) |
-| `Debug` | Debug-lokitus (-Dtraffic.debug=true) |
+| `Debug` | Debug-lokitus (`-Dtraffic.debug=true`) |
 | `SimTime` | Laskee simulaatioajan tickistä (alkuaika ja tickin pituus) |
 | `ControlBar` | Ikkunan yläpalkki: Pause, Slower, Faster, nopeuden näyttö ja kello |
-| `SimulationRunner` | Omistaa ajastimen, nopeuden ja taukotilan (setPaused): 1x on tick 200 ms, nopeudet 0,5x–32x. Suurilla nopeuksilla ajaa useamman tickin per ajastinkutsu |
+| `SimulationRunner` | Omistaa ajastimen, nopeuden ja taukotilan (`setPaused`): 1x on tick 200 ms, nopeudet 0,5x–32x. Suurilla nopeuksilla ajaa useamman tickin per ajastinkutsu |
 | `PointEditor` | Mittauspisteiden lisäys, nimeäminen ja poisto hiirellä. Pysäyttää simulaation dialogin ajaksi |
-
+| `PointStore` | Lukee ja tallentaa mittauspisteet tiedostoon `measurement-points.txt` |
+ 
 ## Rajapinta
  
 Palvelu kuuntelee osoitteessa `http://localhost:5256` (portti on tiedostossa `service/Properties/launchSettings.json`).
@@ -68,7 +69,7 @@ Tallentaa tapahtuman. Esimerkki:
  
 Palauttaa 100 uusinta tapahtumaa, uusin ensin (200 OK).
  
-Simulaatio lähettää tapahtumassa jo lisäkentät simTime, pointName ja speedKmh. Palvelu ohittaa ne, kunnes se päivitetään vaiheessa 6.
+Simulaatio lähettää tapahtumassa jo lisäkentät `simTime`, `pointName` ja `speedKmh`. Palvelu ohittaa ne, kunnes se päivitetään vaiheessa 6A.
  
 ## Tietokanta
  
@@ -83,10 +84,10 @@ Taulu `events`:
 | `direction` | TEXT | ajosuunta pisteen ylitettäessä |
 | `received_at` | TEXT | vastaanottohetki (UTC), tietokanta täyttää itse |
  
-Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muuttuessa vanha tietokanta poistetaan (kaikki kolme tiedostoa: traffic.db, traffic.db-wal ja traffic.db-shm, kun palvelu ei ole käynnissä), ja palvelu luo uuden.
+Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muuttuessa vanha tietokanta poistetaan (kaikki kolme tiedostoa: `traffic.db`, `traffic.db-wal` ja `traffic.db-shm`, kun palvelu ei ole käynnissä), ja palvelu luo uuden.
  
 ## Tehdyt päätökset
-
+ 
 ### Yleiset
  
 - **Pieni ensimmäinen versio.** Uusia ominaisuuksia ei lisätä ennen kuin niiden tarve on perusteltu ja päätetty.
@@ -94,14 +95,14 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 ### Tallennus ja rajapinta
  
 - **Raakaa SQL:ää, ei Entity Frameworkia.** Pidetään tallennus näkyvänä ja yksinkertaisena. SQL-lauseet käyttävät parametreja (ei merkkijonojen liittämistä) SQL-injektion estämiseksi.
-- **Tick ja simulaatioaika kulkevat tapahtumassa mukana.** Simulaatio lähettää sekä tickin että simulaatioajan (`simTime`). Palvelu tallentaa simulaatioajan (`sim_time`) vaiheessa 6. Tietokanta on kertakäyttöinen, joten sarakkeen lisääminen on helppoa tarpeen tullen.
+- **Tick ja simulaatioaika kulkevat tapahtumassa mukana.** Simulaatio lähettää sekä tickin että simulaatioajan (`simTime`). Palvelu tallentaa simulaatioajan (`sim_time`) vaiheessa 6A. Tietokanta on kertakäyttöinen, joten sarakkeen lisääminen on helppoa tarpeen tullen.
 - **Suunnalle ei ole oletusarvoa.** Puuttuva suunta on virhe, jonka halutaan näkyä heti.
 - **Aikaleima on ISO 8601 -muodossa, sekunnin tarkkuudella ja ilman aikavyöhykettä** (esimerkiksi `2026-01-05T08:15:30`). Se on simuloidun maailman paikallinen aika. JSON-aikaleima muotoillaan `DateTimeFormatter.ISO_LOCAL_DATE_TIME`illa, jotta sekunnit ovat aina mukana (`LocalDateTime.toString()` jättää ne pois, kun ne ovat nolla).
-- **SQLite käyttää WAL-tilaa ja `synchronous = NORMAL`-asetusta.** Yksi tapahtuma per pyyntö ja SQLiten oletustila (`rollback journal`) rajoittivat kirjoitusnopeutta niin, että simulaation nopeudella 16x pyynnöt ylittivät aikakatkaisun. WAL-tila (`PRAGMA journal_mode = WAL`) asetetaan tietokantaan kerran käynnistyksessä, ja `synchronous = NORMAL` jokaiselle yhteydelle (`OpenConnection`). Hinta: äkillinen sähkökatko voi hävittää viimeisimmät kirjoitukset, mutta tietokanta ei rikkoudu.
+- **SQLite käyttää WAL-tilaa ja `synchronous = NORMAL`-asetusta.** Yksi tapahtuma per pyyntö ja SQLiten oletustila (rollback journal) rajoittivat kirjoitusnopeutta niin, että simulaation nopeudella 16x pyynnöt ylittivät aikakatkaisun. WAL-tila (`PRAGMA journal_mode = WAL`) asetetaan tietokantaan kerran käynnistyksessä, ja `synchronous = NORMAL` jokaiselle yhteydelle (`OpenConnection`). Hinta: äkillinen sähkökatko voi hävittää viimeisimmät kirjoitukset, mutta tietokanta ei rikkoudu.
 ### Simulaation rakenne
  
 - **Kartta ja piirto erillään.** `CityMap` kuvaa kartan tietona, `Simulation` pitää kirjaa maailman tilasta ja `CityPanel` piirtää sen.
-- **Auto liikkuu yhden ruudun per tick.** Liike on hyppäys ruudulta toiselle (ei sulavaa liikettä), joten mittauspisteen ylitys on helppo havaita. Tickin pituus on 1x-nopeudella 200 ms (BASE_TICK_MILLIS tiedostossa SimulationRunner.java).
+- **Auto liikkuu yhden ruudun per tick.** Liike on hyppäys ruudulta toiselle (ei sulavaa liikettä), joten mittauspisteen ylitys on helppo havaita. Tickin pituus on 1x-nopeudella 200 ms (`BASE_TICK_MILLIS` tiedostossa `SimulationRunner.java`).
 - **Nopeus on kokonaisluku tickeinä.** Auto liikkuu joka N:s tick (`moveEveryTicks`). Arvo arvotaan auton syntyessä: auto liikkuu joka, joka toinen tai joka kolmas tick.
 - **Simulaatioaika lasketaan tickistä.** `SimTime.at(tick)` palauttaa ajan, joka on `tick × SECONDS_PER_TICK` sekuntia alkuajan jälkeen. Yksi tick on 5 sekuntia, ja alkuaika on maanantai 2026-01-05 06:00. Erillistä kelloa ei ole, joten nopeudensäätö ei vaikuta dataan: sama ajo tuottaa samat aikaleimat millä nopeudella tahansa. Kello näkyy yläpalkissa (`ControlBar`) muodossa `Mon 2026-01-05 06:00:00`.
 - **Nopeudensäätö.** Yläpalkin painikkeet Slower, Faster ja Pause. Nopeudet ovat 0,5x–32x. Ajastin ei käy alle 25 ms:n välein: kun nopeus vaatisi tiheämpää, ajetaan useampi tick yhdellä ajastinkutsulla (`stepsPerFrame`) ja piirretään vasta sen jälkeen. `SimulationRunner` omistaa ajastimen ja nopeuden, ja `ControlBar` vain kutsuu sen metodeja.
@@ -118,34 +119,42 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 ### Piirto
  
 - **Valot piirretään risteyksen kaikkiin neljään reunaan.** Vasen ja oikea reuna näyttävät vaakasuunnan värin ja ylä- ja alareuna pystysuunnan värin. `TrafficLight` erottelee vain vaaka- ja pystysuunnan.
-- **Mittauspiste piirretään viivana tien poikki.** Viiva on ruudun keskellä, ja se kattaa molemmat kaistat. Pisteen nimi näkyy tekstinä ruudun kulmassa tummalla taustalla. Nimet piirretään omassa vaiheessaan autojen ja valojen päälle, jotta ne pysyvät luettavina. Risteykseen tai muulle ruudulle asetettu piste piirretään kehyksenä. Piirto lukee pisteet simulaatiolta joka kerta, joten myöhemmin lisättävät ja poistettavat pisteet näkyvät automaattisesti.
-### Mittauspisteiden muokkaus
-
+- **Mittauspiste piirretään viivana tien poikki.** Viiva on ruudun keskellä, ja se kattaa molemmat kaistat. Pisteen nimi näkyy tekstinä ruudun kulmassa tummalla taustalla. Nimet piirretään omassa vaiheessaan autojen ja valojen päälle, jotta ne pysyvät luettavina. Risteykseen tai muulle ruudulle asetettu piste piirretään kehyksenä. Piirto lukee pisteet simulaatiolta joka kerta, joten lisättävät ja poistettavat pisteet näkyvät automaattisesti.
+### Mittauspisteiden muokkaus ja tallennus
+ 
 - **Hiirellä muokkaus.** Vasen klikkaus tieruutuun (`-`, `|` tai `+`) lisää pisteen ja kysyy nimen dialogilla. Vasen klikkaus olemassa olevan pisteen ruutuun avaa nimen muokkauksen, ja oikea klikkaus poistaa pisteen (ei vahvistusta). Nurmelle ei voi asettaa pistettä, ja ruudussa on enintään yksi piste. Kartan työkaluvihje kertoo käytön.
 - **Simulaatio pysähtyy dialogin ajaksi.** `PointEditor` pysäyttää `SimulationRunner`in dialogin ajaksi ja palauttaa sen aiempaan tilaan, joten jo pysäytetty simulaatio pysyy pysäytettynä.
 - **Pisteen tunnistetta ei käytetä uudelleen.** `Simulation` jakaa tunnisteet juoksevalla laskurilla (`nextPointId`), joka ei pienene poiston jälkeen. Nimen vaihtaminen säilyttää tunnisteen (`renamePoint` korvaa muuttumattoman `MeasurementPoint`-recordin uudella).
 - **Muokkaus tapahtuu Swingin tapahtumasäikeessä**, jossa myös simulaatio ajetaan ja piirto tehdään, joten pisteitä ei tarvitse suojata lukituksilla. `Simulation.points()` palauttaa vain luettavan näkymän, ja muutokset tehdään vain metodeilla.
+- **Pisteet tallennetaan tiedostoon.** `PointStore` kirjoittaa pisteet tiedostoon `measurement-points.txt` (ohjelman käynnistyskansio, eli käytännössä `simulation/`) jokaisen muutoksen jälkeen ja lataa ne käynnistyksessä. Tiedosto on `.gitignore`ssa. Rivin muoto on `id;x;y;nimi`, ja ensimmäisellä rivillä on seuraava vapaa tunniste (`nextId=…`), jotta poistettu tunniste ei tule uudelleen käyttöön käynnistyksen jälkeen.
+- **Tallennus on turvallinen, ja lataus sietää virheet.** Tiedosto kirjoitetaan väliaikaiseen tiedostoon ja siirretään paikalleen yhdellä toimenpiteellä, joten kaatuminen kesken kirjoituksen ei riko vanhaa tiedostoa. Jos tiedostoa ei ole, käytetään oletuspisteitä (Lehtotie, Koivutie ja Kuusitie) ja tiedosto luodaan. Jos tiedosto on rikki, tulostetaan virhe ja käytetään oletuspisteitä (seuraava muutos korvaa rikkinäisen tiedoston). Kelvottomat pisteet (nurmella, kartan ulkopuolella tai samassa ruudussa toisen pisteen kanssa) ohitetaan varoituksella.
+- **Simulaatio ei tiedä tiedostoista.** Se ilmoittaa pisteiden muutoksista kuuntelijalle (`setPointsChangedListener`), ja `Main` kytkee kuuntelijaksi tallennuksen. Näin kaikki muutokset tallentuvat riippumatta siitä, mistä ne tulevat.
 ### Tapahtumat ja yhteys palveluun
  
 - **Mittauspiste on yksi ruutu, ja se havaitsee molempien suuntien autot.** Suunta kulkee mukana tapahtumassa (`direction`). Tapahtuma syntyy, kun auto saapuu pisteen ruutuun.
 - **Simulaatio ei tiedä tapahtumien käsittelystä.** Se kutsuu konstruktorissa annettua `Consumer<PassEvent>`-kuuntelijaa.
 - **Lähetys on asynkronista (`sendAsync`).** Hidas tai poissa oleva palvelu ei pysäytä simulaatiota. Yksi pyyntö per tapahtuma, JSON kirjoitetaan käsin. Epäonnistunut lähetys kirjataan `System.err`iin, eikä sitä yritetä uudelleen.
 - **Palvelun osoite on `Main.java`ssa oletusarvona (`DEFAULT_SERVICE_URL`), ja sen voi ohittaa asetuksella `-Dtraffic.serviceUrl=...`.** Simulaatio ei lue palvelun `launchSettings.json`ia, koska se on `dotnet run` -kehityskäytön tiedosto eikä osa rajapintaa.
-- **Konsoli on tavallisessa ajossa hiljainen, ja debug-tila avaa lisätulostuksen.** Tavallisessa ajossa tulostuvat vain virheet (`System.err`) ja yksi käynnistysrivi (palvelun osoite). Asetuksella `-Dtraffic.debug=true` tulostetaan lisäksi autojen reitit ja palvelulle lähetettävät tapahtumat. Tulostus kulkee `Debug.log`in kautta, ja `EventSender` lokittaa lähettämänsä JSON:n.
+- **Konsoli on tavallisessa ajossa hiljainen, ja debug-tila avaa lisätulostuksen.** Tavallisessa ajossa tulostuvat vain virheet (`System.err`) ja käynnistysrivit (palvelun osoite ja mittauspisteiden tiedosto). Asetuksella `-Dtraffic.debug=true` tulostetaan lisäksi autojen reitit ja palvelulle lähetettävät tapahtumat. Tulostus kulkee `Debug.log`in kautta, ja `EventSender` lokittaa lähettämänsä JSON:n.
 - **Mittauspisteellä on nimi.** Tunniste (`id`) on avain, eikä sitä käytetä uudelleen. Nimi on 1–30 merkkiä (kirjaimia, numeroita, välilyöntejä ja tavuviivoja) ilman välilyöntejä alussa tai lopussa. Nimi validoidaan `MeasurementPoint`in konstruktorissa, joten virheellistä nimeä ei voi syntyä. Siksi JSON-kenttään ei tarvita pakotusta.
-- **Tapahtuman muoto.** Tapahtuma sisältää kentät `tick`, `simTime`, `pointId`, `pointName`, `carId`, `direction` ja `speedKmh`. Auton lähtö- ja määränpäätä ei lähetetä, koska oikeassa mittauksessa niitä ei tunnettaisi. Palvelu ei muutu ennen vaihetta 6: se ohittaa tuntemattomat kentät, joten uudet kentät eivät tallennu ennen sitä.
+- **Tapahtuman muoto.** Tapahtuma sisältää kentät `tick`, `simTime`, `pointId`, `pointName`, `carId`, `direction` ja `speedKmh`. Auton lähtö- ja määränpäätä ei lähetetä, koska oikeassa mittauksessa niitä ei tunnettaisi. Palvelu ei ole vielä päivitetty: se ohittaa tuntemattomat kentät, joten uudet kentät eivät tallennu ennen vaihetta 6A.
 - **Nopeus tapahtumassa on auton nimellisnopeus (km/h).** Se lasketaan `moveEveryTicks`ista, tickin pituudesta ja ruudun pituudesta (70 m, `CityMap.TILE_LENGTH_METERS`). Arvot ovat 50, 25 ja 17 km/h. Se ei kuvaa jonossa seisomista.
-## Suunnitellut ratkaisut (vaihe 5, päätetty, ei vielä toteutettu)
+## Suunnitellut ratkaisut (vaihe 6, päätetty, ei vielä toteutettu)
  
-- **Pisteiden tallennus.** Pisteet tallennetaan tiedostoon `simulation/measurement-points.txt` (rivi per piste: `id;x;y;nimi`) jokaisen muutoksen jälkeen ja ladataan käynnistyessä. Tiedosto on `.gitignore`ssa. Jos sitä ei ole, aloitetaan kolmella oletuspisteellä (Lehtotie, Koivutie, Mäntytie).
+- **Tilastot lasketaan palvelussa SQL-kyselyillä** (`GROUP BY`), eikä katseluliittymässä. Tilastot käyttävät simulaatioaikaa (`sim_time`), eivät vastaanottoaikaa (`received_at`), koska simulaation nopeus vaihtelee.
+- **Tilastoja on kaksi:** pistekohtainen yhteenveto (ohitukset, keskinopeus ja suuntajakauma) ja tuntikohtaiset ohitusmäärät pisteittäin.
+- **Testit.** C#-testit xUnitilla, ja ne ajetaan väliaikaista tietokantaa vasten. Tietokannan sijainti tulee asetuksesta, jotta testit voivat käyttää omaa tiedostoaan.
+- **Katseluliittymä on yksi HTML-sivu**, jota palvelu tarjoaa osoitteessa `/`. Se käyttää pelkkää JavaScriptiä ja SVG:tä, ei ulkoisia kirjastoja eikä verkkopalveluja.
+- **Vuorokausirytmi tehdään viimeisenä.** Nyt syntymisväli on tasainen, joten tuntikohtainen kaavio on aluksi tasainen. Ruuhka-ajat lisätään simulaatioon vasta, kun tilastot on nähty (vaihe 6E).
 ## Tunnetut rajoitukset
  
 - **Jumiutumisriski.** Kun autoja on paljon, ne voivat jonottaa ristiin niin, ettei kukaan pääse liikkeelle. Valot, rajoitettu syntymisväli ja "älä tuki risteystä" -sääntö vähentävät riskiä. Jos jumiutumista esiintyy, se ratkaistaan silloin.
+- **Nopeus tapahtumassa on nimellisnopeus, ei hetkellisnopeus.** Arvoja on vain kolme (50, 25 ja 17 km/h), joten keskinopeudet ovat sekoitus näistä.
 ## Väliaikaiset ratkaisut
  
 Nämä ovat käytössä nyt ja korvataan seuraavien vaiheiden aikana:
  
-- **Mittauspisteet aloitetaan kovakoodatuista oletuspisteistä (Simulation.createPoints()), eikä muutoksia tallenneta.**, Korvautuu tallennuksella (vaihe 5E).
+- **Palvelu ohittaa tapahtuman uudet kentät** (`simTime`, `pointName` ja `speedKmh`), joten ne eivät tallennu. Korvautuu vaiheessa 6A.
 ## Ajaminen
  
 Palvelun ja simulaation ajo-ohjeet, portin vaihtaminen ja debug-asetus ovat tiedostossa `README.md`.
@@ -154,28 +163,33 @@ Palvelun ja simulaation ajo-ohjeet, portin vaihtaminen ja debug-asetus ovat tied
  
 Valmista:
  
-- C#-palvelu: `POST /events`, `GET /events`, SQLite-tallennus.
+- C#-palvelu: `POST /events`, `GET /events`, SQLite-tallennus (WAL-tila).
 - Java: ikkuna, joka piirtää kaupungin ruudukon (12 × 9 ruutua, kartta tekstirivinä).
 - Java: kaksikaistaiset tiet, oikeanpuoleinen liikenne ja kaistaviiva.
 - Java: autot syntyvät satunnaisesti kartan reunoilla, saavat satunnaisen määränpään ja lyhimmän reitin (`RoutePlanner`, leveyshaku), kääntyvät risteyksissä reitin mukaan ja poistuvat määränpäässään.
 - Java: autoilla on eri nopeus, auto liikkuu vain jos edessä oleva ruutu on vapaa, ja risteykseen ajetaan vain jos sen jälkeinen ruutu on vapaa.
 - Java: liikennevalot kaikissa `+`-risteyksissä, piirretty risteysruudun reunoihin.
-- Java: kolme mittauspistettä, jotka on piirretty kartalle ja jotka tuottavat `PassEvent`-tapahtuman, kun auto saapuu pisteen ruutuun.
-- Java: `EventSender` lähettää tapahtumat palvelulle, ja ne tallentuvat tietokantaan. Koko ketju Java → HTTP → C# → SQLite toimii.
-- Java: simulaatiolla on oma aika (yksi tick on 5 sekuntia), joka näkyy ikkunan yläpalkissa, ja tapahtuma kuljettaa aikaleiman (simTime).
-- Java: Java: nopeudensäätö (Pause, Slower ja Faster, 0,5x–32x) yläpalkissa.
-- Java: mittauspisteillä on nimet (näkyvät kartalla), ja tapahtuma kuljettaa nimen (pointName) ja nimellisnopeuden (speedKmh).
-- Java: mittauspisteitä voi lisätä, nimetä uudelleen ja poistaa hiirellä ohjelman käydessä
-
+- Java: simulaatiolla on oma aika (yksi tick on 5 sekuntia), joka näkyy ikkunan yläpalkissa, ja nopeutta voi säätää (Pause, Slower ja Faster, 0,5x–32x).
+- Java: mittauspisteillä on nimet, ja ne piirretään kartalle. Pisteitä voi lisätä, nimetä uudelleen ja poistaa hiirellä ohjelman käydessä, ja ne tallentuvat tiedostoon ja latautuvat käynnistyksessä.
+- Java: `EventSender` lähettää tapahtumat (mukana `simTime`, `pointName` ja `speedKmh`) palvelulle, ja ne tallentuvat tietokantaan. Koko ketju Java → HTTP → C# → SQLite toimii.
+Simulaatio on valmis. Palvelu tallentaa toistaiseksi vain vanhat kentät.
+ 
 ## Seuraavat vaiheet
  
-Vaiheet 1–4 ja 5A-5D on tehty
+Vaiheet 1–5 on tehty (simulaatio).
  
-5. **Simulaation lisäominaisuudet.** Kukin osa kokeillaan ja commitoidaan erikseen:
-
-   - 5E. Pisteiden tallennus ja lataus.
-6. **Palvelun muutokset (uudet kentät), tilastot ja yhteenvedot, tapahtumien erälähetys, datan katseluliittymä ja automaattiset testit**, vasta kun simulaatio on valmis. Näiden keskinäistä järjestystä ei ole vielä päätetty.
+6. **Tietojen käsittely ja esitys.** Kukin osa kokeillaan ja commitoidaan erikseen:
+   - 6A. Palvelun uudet kentät. Tietokantaan sarakkeet `sim_time`, `point_name` ja `speed_kmh`, uusien kenttien tarkistukset, indeksit kyselyjä varten ja päivitetty `requests.http`. Vanha tietokanta poistetaan, ja palvelu luo uuden.
+   - 6B. Automaattiset testit (C#, xUnit): vastaanotto, tarkistukset ja haku. Tietokannan sijainti siirretään asetukseksi, jotta testit voivat käyttää väliaikaista tietokantaa.
+   - 6C. Tilastot: pistekohtainen yhteenveto ja tuntikohtaiset ohitusmäärät SQL-kyselyinä, testeineen.
+   - 6D. Katseluliittymä: yksi HTML-sivu osoitteessa `/` (yhteenvetotaulukko, tuntikaavio ja viimeisimmät tapahtumat).
+   - 6E. Vuorokausirytmi simulaatioon (ruuhka-ajat), kun tilastot on nähty.
 ## Ei tehdä
  
-Jalankulkijat, ohitukset, kolarit, ruuhkaa väistävä reitinvalinta.
+Jalankulkijat, ohitukset, kolarit ja ruuhkaa väistävä reitinvalinta jätetään pois.
+ 
+## Jätetty myöhemmäksi
+ 
+- **Tapahtumien erälähetys.** Poistettu suunnitelmasta, koska WAL-tila ratkaisi suorituskyvyn (palvelu kestää 32x-nopeuden). Otetaan käyttöön vain, jos tarve ilmenee.
+- **Java-testit ja Maven.** JUnit vaatii ulkopuolisen kirjaston, joten Mavenin (tai Gradlen) käyttöönotosta päätetään erikseen. Alustava kanta on, ettei näitä tehdä.
  
