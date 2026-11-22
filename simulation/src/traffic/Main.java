@@ -3,11 +3,9 @@ package traffic;
 import java.awt.BorderLayout;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 
 public class Main {
 
-    private static final int TICK_MILLIS = 200;
     private static final String DEFAULT_SERVICE_URL = "http://localhost:5256";
 
     public static void main(String[] args) {
@@ -23,7 +21,12 @@ public class Main {
 
         Simulation simulation = new Simulation(map, sender::send);
         CityPanel panel = new CityPanel(simulation);
-        ControlBar controlBar = new ControlBar(simulation);
+        SimulationRunner runner = new SimulationRunner(simulation);
+        ControlBar controlBar = new ControlBar(simulation, runner);
+        runner.setFrameListener(() -> {
+            panel.repaint();
+            controlBar.refresh();
+        });
 
         JFrame frame = new JFrame("Traffic simulation");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -33,11 +36,6 @@ public class Main {
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
 
-        Timer timer = new Timer(TICK_MILLIS, e -> {
-            simulation.step();
-            panel.repaint();
-            controlBar.refresh();
-        });
-        timer.start();
+        runner.start();
     }
 }

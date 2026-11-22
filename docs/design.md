@@ -24,7 +24,7 @@ Tiedonkulku on yksisuuntainen: simulaatio lähettää tapahtumia, palvelu tallen
 |---|---|---|
 | Simulaatio | `simulation/` | Java 25, Swing, ei Mavenia (käännös `javac`illa) |
 | Palvelu | `service/` | C#, ASP.NET Core minimal API (.NET 10) |
-| Tietokanta | `service/traffic.db` | SQLite, ei versionhallinnassa |
+| Tietokanta | `service/traffic.db (sekä -wal ja -shm)` | SQLite, ei versionhallinnassa |
  
 ## Java-luokat
  
@@ -32,7 +32,7 @@ Kansiossa `simulation/src/traffic/`:
  
 | Luokka | Tehtävä |
 |---|---|
-| `Main` | Käynnistää ikkunan (yläpalkki ja kartta) ja ajastimen (tick 200 ms), kytkee tapahtumakuuntelijan |
+| `Main` | Käynnistää ikkunan (yläpalkki ja kartta), kytkee tapahtumakuuntelijan ja käynnistää SimulationRunnerin |
 | `CityMap` | Kartta tietona (merkkirivit) ja tiesäännöt (`isInside`, `roadAllows`) |
 | `CityPanel` | Piirtää kartan, mittauspisteet, valot ja autot |
 | `Simulation` | Maailman tila: autot, valot, mittauspisteet ja syntymispisteet. `step()` on yksi tick: autojen liike ja uuden auton syntyminen |
@@ -46,8 +46,9 @@ Kansiossa `simulation/src/traffic/`:
 | `EventSender` | Lähettää tapahtuman palvelulle HTTP POST -pyynnöllä (osoite annetaan konstruktorissa) |
 | `Debug` | Debug-lokitus (-Dtraffic.debug=true) |
 | `SimTime` | Laskee simulaatioajan tickistä (alkuaika ja tickin pituus) |
-| `ControlBar` | Ikkunan yläpalkki, jossa kello |
-  
+| `ControlBar` | Ikkunan yläpalkki: Pause, Slower, Faster, nopeuden näyttö ja kello |
+| `SimulationRunner` | Omistaa ajastimen ja nopeuden: 1x on tick 200 ms, nopeudet 0,5x–32x ja Pause. Suurilla nopeuksilla ajaa useamman tickin per ajastinkutsu |
+
 ## Rajapinta
  
 Palvelu kuuntelee osoitteessa `http://localhost:5256` (portti on tiedostossa `service/Properties/launchSettings.json`).
@@ -81,7 +82,7 @@ Taulu `events`:
 | `direction` | TEXT | ajosuunta pisteen ylitettäessä |
 | `received_at` | TEXT | vastaanottohetki (UTC), tietokanta täyttää itse |
  
-Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muuttuessa vanha `traffic.db` poistetaan, ja palvelu luo uuden.
+Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muuttuessa vanha tietokanta poistetaan (kaikki kolme tiedostoa: traffic.db, traffic.db-wal ja traffic.db-shm, kun palvelu ei ole käynnissä), ja palvelu luo uuden.
  
 ## Tehdyt päätökset
 
@@ -95,12 +96,14 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Tick ja simulaatioaika kulkevat tapahtumassa mukana.** Simulaatio lähettää sekä tickin että simulaatioajan (`simTime`). Palvelu tallentaa simulaatioajan (`sim_time`) vaiheessa 6. Tietokanta on kertakäyttöinen, joten sarakkeen lisääminen on helppoa tarpeen tullen.
 - **Suunnalle ei ole oletusarvoa.** Puuttuva suunta on virhe, jonka halutaan näkyä heti.
 - **Aikaleima on ISO 8601 -muodossa, sekunnin tarkkuudella ja ilman aikavyöhykettä** (esimerkiksi `2026-01-05T08:15:30`). Se on simuloidun maailman paikallinen aika. JSON-aikaleima muotoillaan `DateTimeFormatter.ISO_LOCAL_DATE_TIME`illa, jotta sekunnit ovat aina mukana (`LocalDateTime.toString()` jättää ne pois, kun ne ovat nolla).
+- **SQLite käyttää WAL-tilaa ja `synchronous = NORMAL`-asetusta.** Yksi tapahtuma per pyyntö ja SQLiten oletustila (`rollback journal`) rajoittivat kirjoitusnopeutta niin, että simulaation nopeudella 16x pyynnöt ylittivät aikakatkaisun. WAL-tila (`PRAGMA journal_mode = WAL`) asetetaan tietokantaan kerran käynnistyksessä, ja `synchronous = NORMAL` jokaiselle yhteydelle (`OpenConnection`). Hinta: äkillinen sähkökatko voi hävittää viimeisimmät kirjoitukset, mutta tietokanta ei rikkoudu.
 ### Simulaation rakenne
  
 - **Kartta ja piirto erillään.** `CityMap` kuvaa kartan tietona, `Simulation` pitää kirjaa maailman tilasta ja `CityPanel` piirtää sen.
-- **Auto liikkuu yhden ruudun per tick.** Liike on hyppäys ruudulta toiselle (ei sulavaa liikettä), joten mittauspisteen ylitys on helppo havaita. Tickin pituus on 200 ms (`TICK_MILLIS` tiedostossa `Main.java`).
+- **Auto liikkuu yhden ruudun per tick.** Liike on hyppäys ruudulta toiselle (ei sulavaa liikettä), joten mittauspisteen ylitys on helppo havaita. Tickin pituus on 1x-nopeudella 200 ms (BASE_TICK_MILLIS tiedostossa SimulationRunner.java).
 - **Nopeus on kokonaisluku tickeinä.** Auto liikkuu joka N:s tick (`moveEveryTicks`). Arvo arvotaan auton syntyessä: auto liikkuu joka, joka toinen tai joka kolmas tick.
 - **Simulaatioaika lasketaan tickistä.** `SimTime.at(tick)` palauttaa ajan, joka on `tick × SECONDS_PER_TICK` sekuntia alkuajan jälkeen. Yksi tick on 5 sekuntia, ja alkuaika on maanantai 2026-01-05 06:00. Erillistä kelloa ei ole, joten nopeudensäätö ei vaikuta dataan: sama ajo tuottaa samat aikaleimat millä nopeudella tahansa. Kello näkyy yläpalkissa (`ControlBar`) muodossa `Mon 2026-01-05 06:00:00`.
+- **Nopeudensäätö.** Yläpalkin painikkeet Slower, Faster ja Pause. Nopeudet ovat 0,5x–32x. Ajastin ei käy alle 25 ms:n välein: kun nopeus vaatisi tiheämpää, ajetaan useampi tick yhdellä ajastinkutsulla (`stepsPerFrame`) ja piirretään vasta sen jälkeen. `SimulationRunner` omistaa ajastimen ja nopeuden, ja `ControlBar` vain kutsuu sen metodeja.
 ### Liikenne
  
 - **Autot syntyvät kartan reunoilla ja poistuvat määränpäässään.** Syntymispisteet löytyvät kartasta automaattisesti: reunalla oleva tieruutu, jonka suunta on reunasta sisäänpäin (nykyisellä kartalla kahdeksan). Syntymisväli on satunnainen (5–20 tickiä), piste arvotaan, ja jos kaista on varattu, syntyminen odottaa seuraavaan tickiin. Auto poistuu, kun se on ajanut reittinsä loppuun. Jokainen auto saa juoksevan tunnisteen.
@@ -124,7 +127,6 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Konsoli on tavallisessa ajossa hiljainen, ja debug-tila avaa lisätulostuksen.** Tavallisessa ajossa tulostuvat vain virheet (`System.err`) ja yksi käynnistysrivi (palvelun osoite). Asetuksella `-Dtraffic.debug=true` tulostetaan lisäksi autojen reitit ja palvelulle lähetettävät tapahtumat. Tulostus kulkee `Debug.log`in kautta, ja `EventSender` lokittaa lähettämänsä JSON:n.
 ## Suunnitellut ratkaisut (vaihe 5, päätetty, ei vielä toteutettu)
  
-- **Nopeudensäätö.** Yläpalkissa painikkeet Slower, Faster ja Pause sekä nykyisen nopeuden näyttö. Nopeudet ovat 0,5x–32x. Alle 25 ms:n ajastinvälejä ei käytetä, vaan suuremmilla nopeuksilla ajetaan useampi tick yhdellä ajastinkutsulla.
 - **Mittauspisteellä on nimi.** Tunniste (`id`) on avain, eikä sitä käytetä uudelleen. Nimi on 1–30 merkkiä (kirjaimia, numeroita, välilyöntejä ja tavuviivoja), ja se näkyy kartalla numeron tilalla.
 - **Hiirellä muokkaus.** Vasen klikkaus tieruutuun lisää pisteen tai muokkaa olemassa olevan pisteen nimeä, oikea klikkaus poistaa pisteen. Simulaatio pysähtyy dialogin ajaksi.
 - **Pisteiden tallennus.** Pisteet tallennetaan tiedostoon `simulation/measurement-points.txt` (rivi per piste: `id;x;y;nimi`) jokaisen muutoksen jälkeen ja ladataan käynnistyessä. Tiedosto on `.gitignore`ssa. Jos sitä ei ole, aloitetaan kolmella oletuspisteellä (Lehtotie, Koivutie, Mäntytie).
@@ -155,14 +157,14 @@ Valmista:
 - Java: kolme mittauspistettä, jotka on piirretty kartalle ja jotka tuottavat `PassEvent`-tapahtuman, kun auto saapuu pisteen ruutuun.
 - Java: `EventSender` lähettää tapahtumat palvelulle, ja ne tallentuvat tietokantaan. Koko ketju Java → HTTP → C# → SQLite toimii.
 - Java: simulaatiolla on oma aika (yksi tick on 5 sekuntia), joka näkyy ikkunan yläpalkissa, ja tapahtuma kuljettaa aikaleiman (simTime).
+- Java: Java: nopeudensäätö (Pause, Slower ja Faster, 0,5x–32x) yläpalkissa.
 
 ## Seuraavat vaiheet
  
-Vaiheet 1–4 ja 5A on tehty
+Vaiheet 1–4 ja 5A ja 5B on tehty
  
 5. **Simulaation lisäominaisuudet.** Kukin osa kokeillaan ja commitoidaan erikseen:
 
-   - 5B. Nopeudensäätö.
    - 5C. Mittauspisteiden nimet sekä tapahtuman `pointName`- ja `speedKmh`-kentät.
    - 5D. Mittauspisteiden lisäys, nimeäminen ja poisto hiirellä.
    - 5E. Pisteiden tallennus ja lataus.
