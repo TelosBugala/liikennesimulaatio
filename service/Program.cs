@@ -16,8 +16,7 @@ app.MapPost("/events", (EventDto e) =>
         return Results.BadRequest("direction must be NORTH, EAST, SOUTH or WEST");
     }
 
-    using var connection = new SqliteConnection(connectionString);
-    connection.Open();
+    using var connection = OpenConnection(connectionString);
 
     using var command = connection.CreateCommand();
     command.CommandText = """
@@ -37,8 +36,7 @@ app.MapGet("/events", () =>
 {
     var events = new List<StoredEvent>();
 
-    using var connection = new SqliteConnection(connectionString);
-    connection.Open();
+    using var connection = OpenConnection(connectionString);
 
     using var command = connection.CreateCommand();
     command.CommandText = """
@@ -65,10 +63,30 @@ app.MapGet("/events", () =>
 
 app.Run();
 
+static SqliteConnection OpenConnection(string connectionString)
+{
+    var connection = new SqliteConnection(connectionString);
+    connection.Open();
+
+    // synchronous on yhteyskohtainen asetus, joten se asetetaan jokaiselle yhteydelle
+    using var command = connection.CreateCommand();
+    command.CommandText = "PRAGMA synchronous = NORMAL;";
+    command.ExecuteNonQuery();
+
+    return connection;
+}
+
 static void InitializeDatabase(string connectionString)
 {
     using var connection = new SqliteConnection(connectionString);
     connection.Open();
+
+    // WAL-tila säilyy tietokantatiedostossa, joten riittää asettaa kerran
+    using (var pragma = connection.CreateCommand())
+    {
+        pragma.CommandText = "PRAGMA journal_mode = WAL;";
+        pragma.ExecuteNonQuery();
+    }
 
     using var command = connection.CreateCommand();
     command.CommandText = """
