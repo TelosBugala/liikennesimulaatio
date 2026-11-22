@@ -32,13 +32,20 @@ public class SimulationRunner {
         timer.start();
     }
 
-    public void togglePause() {
-        paused = !paused;
+     public void setPaused(boolean paused) {
+        if (this.paused == paused) {
+            return;
+        }
+        this.paused = paused;
         if (paused) {
             timer.stop();
         } else {
             timer.start();
         }
+    }
+
+    public void togglePause() {
+        setPaused(!paused);
     }
 
     public void faster() {

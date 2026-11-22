@@ -5,6 +5,9 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.FontMetrics;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import javax.swing.SwingUtilities;
 import javax.swing.JPanel;
 
 public class CityPanel extends JPanel {
@@ -18,13 +21,43 @@ public class CityPanel extends JPanel {
     private static final Color POINT_COLOR = new Color(0, 200, 255);
 
     private final Simulation simulation;
+    private PointEditor pointEditor;
 
-    public CityPanel(Simulation simulation) {
+        public CityPanel(Simulation simulation) {
         this.simulation = simulation;
         CityMap map = simulation.map();
         setPreferredSize(new Dimension(
             map.width() * TILE_SIZE,
             map.height() * TILE_SIZE));
+        setToolTipText("Left click: add or rename a measurement point. "
+            + "Right click: remove it.");
+        addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                handleMouse(e);
+            }
+        });
+    }
+
+    public void setPointEditor(PointEditor pointEditor) {
+        this.pointEditor = pointEditor;
+    }
+
+    private void handleMouse(MouseEvent e) {
+        if (pointEditor == null) {
+            return;
+        }
+        CityMap map = simulation.map();
+        int x = e.getX() / TILE_SIZE;
+        int y = e.getY() / TILE_SIZE;
+        if (x < 0 || y < 0 || x >= map.width() || y >= map.height()) {
+            return;
+        }
+        if (SwingUtilities.isLeftMouseButton(e)) {
+            pointEditor.leftClick(x, y);
+        } else if (SwingUtilities.isRightMouseButton(e)) {
+            pointEditor.rightClick(x, y);
+        }
     }
 
        @Override

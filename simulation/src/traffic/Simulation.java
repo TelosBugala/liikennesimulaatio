@@ -1,6 +1,7 @@
 package traffic;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -22,6 +23,7 @@ public class Simulation {
     private final List<MeasurementPoint> points = new ArrayList<>();
     private final List<SpawnPoint> spawnPoints = new ArrayList<>();
     private int nextCarId = 1;
+    private int nextPointId = 1;
     private int ticksUntilSpawn;
     private long tick = 0;
 
@@ -46,9 +48,9 @@ public class Simulation {
     }
 
         private void createPoints() {
-        points.add(new MeasurementPoint(1, "Lehtotie", 1, 2));
-        points.add(new MeasurementPoint(2, "Koivutie", 10, 2));
-        points.add(new MeasurementPoint(3, "Kuusitie", 3, 4));
+        addPoint("Lehtotie", 1, 2);
+        addPoint("Koivutie", 10, 2);
+        addPoint("Kuusitie", 3, 4);
     }
 
     private void createSpawnPoints() {
@@ -184,7 +186,34 @@ public class Simulation {
     public CityMap map() { return map; }
     public List<Car> cars() { return cars; }
     public List<TrafficLight> lights() { return lights; }
-    public List<MeasurementPoint> points() { return points; }
+    public List<MeasurementPoint> points() { return Collections.unmodifiableList(points); }
     public long tick() { return tick; }
-        public LocalDateTime simTime() { return SimTime.at(tick); }
+    public LocalDateTime simTime() { return SimTime.at(tick); }
+
+    public MeasurementPoint addPoint(String name, int x, int y) {
+        MeasurementPoint point = new MeasurementPoint(nextPointId++, name, x, y);
+        points.add(point);
+        return point;
+    }
+
+    public void renamePoint(MeasurementPoint point, String newName) {
+        int index = points.indexOf(point);
+        if (index >= 0) {
+            points.set(index,
+                new MeasurementPoint(point.id(), newName, point.x(), point.y()));
+        }
+    }
+
+    public void removePoint(MeasurementPoint point) {
+        points.remove(point);
+    }
+
+    public MeasurementPoint pointAt(int x, int y) {
+        for (MeasurementPoint point : points) {
+            if (point.x() == x && point.y() == y) {
+                return point;
+            }
+        }
+        return null;
+    }
 }

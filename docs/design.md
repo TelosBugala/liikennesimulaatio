@@ -33,9 +33,9 @@ Kansiossa `simulation/src/traffic/`:
 | Luokka | Tehtävä |
 |---|---|
 | `Main` | Käynnistää ikkunan (yläpalkki ja kartta), kytkee tapahtumakuuntelijan ja käynnistää SimulationRunnerin |
-| `CityMap` | Kartta tietona (merkkirivit), tiesäännöt (isInside, roadAllows) ja ruudun pituus metreinä|
-| `CityPanel` | Piirtää kartan, mittauspisteet, valot ja autot |
-| `Simulation` | Maailman tila: autot, valot, mittauspisteet ja syntymispisteet. `step()` on yksi tick: autojen liike ja uuden auton syntyminen |
+| `CityMap` | Kartta tietona (merkkirivit), tiesäännöt (isInside, isRoad, roadAllows) ja ruudun pituus metreinä|
+| `CityPanel` | Piirtää kartan, mittauspisteet, valot, autot ja pisteiden nimet, ja välittää hiiren klikkaukset PointEditorille |
+| `Simulation` | Maailman tila: autot, valot, mittauspisteet ja syntymispisteet. `step()` on yksi tick: autojen liike ja uuden auton syntyminen. Hallinnoi mittauspisteitä (addPoint, renamePoint, removePoint, pointAt) |
 | `Car` | Auton sijainti, viimeisin ajosuunta, nopeus (moveEveryTicks, nimellisnopeus km/h) ja reitti (lista suuntia) |
 | `Direction` | Neljä pääsuuntaa (enum) |
 | `TrafficLight` | Risteyksen valo. Tila lasketaan tickistä |
@@ -47,7 +47,8 @@ Kansiossa `simulation/src/traffic/`:
 | `Debug` | Debug-lokitus (-Dtraffic.debug=true) |
 | `SimTime` | Laskee simulaatioajan tickistä (alkuaika ja tickin pituus) |
 | `ControlBar` | Ikkunan yläpalkki: Pause, Slower, Faster, nopeuden näyttö ja kello |
-| `SimulationRunner` | Omistaa ajastimen ja nopeuden: 1x on tick 200 ms, nopeudet 0,5x–32x ja Pause. Suurilla nopeuksilla ajaa useamman tickin per ajastinkutsu |
+| `SimulationRunner` | Omistaa ajastimen, nopeuden ja taukotilan (setPaused): 1x on tick 200 ms, nopeudet 0,5x–32x. Suurilla nopeuksilla ajaa useamman tickin per ajastinkutsu |
+| `PointEditor` | Mittauspisteiden lisäys, nimeäminen ja poisto hiirellä. Pysäyttää simulaation dialogin ajaksi |
 
 ## Rajapinta
  
@@ -118,6 +119,12 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
  
 - **Valot piirretään risteyksen kaikkiin neljään reunaan.** Vasen ja oikea reuna näyttävät vaakasuunnan värin ja ylä- ja alareuna pystysuunnan värin. `TrafficLight` erottelee vain vaaka- ja pystysuunnan.
 - **Mittauspiste piirretään viivana tien poikki.** Viiva on ruudun keskellä, ja se kattaa molemmat kaistat. Pisteen nimi näkyy tekstinä ruudun kulmassa tummalla taustalla. Nimet piirretään omassa vaiheessaan autojen ja valojen päälle, jotta ne pysyvät luettavina. Risteykseen tai muulle ruudulle asetettu piste piirretään kehyksenä. Piirto lukee pisteet simulaatiolta joka kerta, joten myöhemmin lisättävät ja poistettavat pisteet näkyvät automaattisesti.
+### Mittauspisteiden muokkaus
+
+- **Hiirellä muokkaus.** Vasen klikkaus tieruutuun (`-`, `|` tai `+`) lisää pisteen ja kysyy nimen dialogilla. Vasen klikkaus olemassa olevan pisteen ruutuun avaa nimen muokkauksen, ja oikea klikkaus poistaa pisteen (ei vahvistusta). Nurmelle ei voi asettaa pistettä, ja ruudussa on enintään yksi piste. Kartan työkaluvihje kertoo käytön.
+- **Simulaatio pysähtyy dialogin ajaksi.** `PointEditor` pysäyttää `SimulationRunner`in dialogin ajaksi ja palauttaa sen aiempaan tilaan, joten jo pysäytetty simulaatio pysyy pysäytettynä.
+- **Pisteen tunnistetta ei käytetä uudelleen.** `Simulation` jakaa tunnisteet juoksevalla laskurilla (`nextPointId`), joka ei pienene poiston jälkeen. Nimen vaihtaminen säilyttää tunnisteen (`renamePoint` korvaa muuttumattoman `MeasurementPoint`-recordin uudella).
+- **Muokkaus tapahtuu Swingin tapahtumasäikeessä**, jossa myös simulaatio ajetaan ja piirto tehdään, joten pisteitä ei tarvitse suojata lukituksilla. `Simulation.points()` palauttaa vain luettavan näkymän, ja muutokset tehdään vain metodeilla.
 ### Tapahtumat ja yhteys palveluun
  
 - **Mittauspiste on yksi ruutu, ja se havaitsee molempien suuntien autot.** Suunta kulkee mukana tapahtumassa (`direction`). Tapahtuma syntyy, kun auto saapuu pisteen ruutuun.
@@ -130,7 +137,6 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Nopeus tapahtumassa on auton nimellisnopeus (km/h).** Se lasketaan `moveEveryTicks`ista, tickin pituudesta ja ruudun pituudesta (70 m, `CityMap.TILE_LENGTH_METERS`). Arvot ovat 50, 25 ja 17 km/h. Se ei kuvaa jonossa seisomista.
 ## Suunnitellut ratkaisut (vaihe 5, päätetty, ei vielä toteutettu)
  
-- **Hiirellä muokkaus.** Vasen klikkaus tieruutuun lisää pisteen tai muokkaa olemassa olevan pisteen nimeä, oikea klikkaus poistaa pisteen. Simulaatio pysähtyy dialogin ajaksi.
 - **Pisteiden tallennus.** Pisteet tallennetaan tiedostoon `simulation/measurement-points.txt` (rivi per piste: `id;x;y;nimi`) jokaisen muutoksen jälkeen ja ladataan käynnistyessä. Tiedosto on `.gitignore`ssa. Jos sitä ei ole, aloitetaan kolmella oletuspisteellä (Lehtotie, Koivutie, Mäntytie).
 ## Tunnetut rajoitukset
  
@@ -139,7 +145,7 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
  
 Nämä ovat käytössä nyt ja korvataan seuraavien vaiheiden aikana:
  
-- **Mittauspisteet on kovakoodattu `Simulation.createPoints()`-metodiin**, eikä niitä voi muokata ohjelman käydessä. Korvautuu lisäyksellä, poistolla ja tallennuksella (vaiheet 5D ja 5E).
+- **Mittauspisteet aloitetaan kovakoodatuista oletuspisteistä (Simulation.createPoints()), eikä muutoksia tallenneta.**, Korvautuu tallennuksella (vaihe 5E).
 ## Ajaminen
  
 Palvelun ja simulaation ajo-ohjeet, portin vaihtaminen ja debug-asetus ovat tiedostossa `README.md`.
@@ -159,14 +165,14 @@ Valmista:
 - Java: simulaatiolla on oma aika (yksi tick on 5 sekuntia), joka näkyy ikkunan yläpalkissa, ja tapahtuma kuljettaa aikaleiman (simTime).
 - Java: Java: nopeudensäätö (Pause, Slower ja Faster, 0,5x–32x) yläpalkissa.
 - Java: mittauspisteillä on nimet (näkyvät kartalla), ja tapahtuma kuljettaa nimen (pointName) ja nimellisnopeuden (speedKmh).
+- Java: mittauspisteitä voi lisätä, nimetä uudelleen ja poistaa hiirellä ohjelman käydessä
 
 ## Seuraavat vaiheet
  
-Vaiheet 1–4 ja 5A-5C on tehty
+Vaiheet 1–4 ja 5A-5D on tehty
  
 5. **Simulaation lisäominaisuudet.** Kukin osa kokeillaan ja commitoidaan erikseen:
 
-   - 5D. Mittauspisteiden lisäys, nimeäminen ja poisto hiirellä.
    - 5E. Pisteiden tallennus ja lataus.
 6. **Palvelun muutokset (uudet kentät), tilastot ja yhteenvedot, tapahtumien erälähetys, datan katseluliittymä ja automaattiset testit**, vasta kun simulaatio on valmis. Näiden keskinäistä järjestystä ei ole vielä päätetty.
 ## Ei tehdä

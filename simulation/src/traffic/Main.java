@@ -23,6 +23,7 @@ public class Main {
         CityPanel panel = new CityPanel(simulation);
         SimulationRunner runner = new SimulationRunner(simulation);
         ControlBar controlBar = new ControlBar(simulation, runner);
+        panel.setPointEditor(new PointEditor(simulation, runner, panel));
         runner.setFrameListener(() -> {
             panel.repaint();
             controlBar.refresh();

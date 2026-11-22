@@ -39,6 +39,11 @@ public class CityMap {
         return x >= 0 && x < width() && y >= 0 && y < height();
     }
 
+    public boolean isRoad(int x, int y) {
+        char tile = tileAt(x, y);
+        return tile == '-' || tile == '|' || tile == '+';
+    }
+    
     public boolean roadAllows(int x, int y, Direction direction) {
         char tile = tileAt(x, y);
         return tile == '+'
