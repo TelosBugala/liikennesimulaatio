@@ -45,10 +45,10 @@ public class Simulation {
         }
     }
 
-    private void createPoints() {
-        points.add(new MeasurementPoint(1, 1, 2));
-        points.add(new MeasurementPoint(2, 10, 2));
-        points.add(new MeasurementPoint(3, 3, 4));
+        private void createPoints() {
+        points.add(new MeasurementPoint(1, "Lehtotie", 1, 2));
+        points.add(new MeasurementPoint(2, "Koivutie", 10, 2));
+        points.add(new MeasurementPoint(3, "Kuusitie", 3, 4));
     }
 
     private void createSpawnPoints() {
@@ -143,8 +143,9 @@ public class Simulation {
     private void reportPassings(Car car) {
         for (MeasurementPoint point : points) {
             if (point.x() == car.x() && point.y() == car.y()) {
-                 eventListener.accept(new PassEvent(
-                    tick, SimTime.at(tick), point.id(), car.id(), car.direction()));
+                    eventListener.accept(new PassEvent(
+                    tick, SimTime.at(tick), point.id(), point.name(),
+                    car.id(), car.direction(), car.speedKmh()));
             }
         }
     }

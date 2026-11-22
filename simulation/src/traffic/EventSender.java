@@ -17,12 +17,15 @@ public class EventSender {
     }
 
     public void send(PassEvent event) {
+                // pointName on validoitu (MeasurementPoint), joten JSON-pakotusta ei tarvita
         String json = String.format(
             "{ \"tick\": %d, \"simTime\": \"%s\", \"pointId\": %d, "
-                + "\"carId\": %d, \"direction\": \"%s\" }",
+                + "\"pointName\": \"%s\", \"carId\": %d, "
+                + "\"direction\": \"%s\", \"speedKmh\": %d }",
             event.tick(),
             DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(event.simTime()),
-            event.pointId(), event.carId(), event.direction().name());
+            event.pointId(), event.pointName(),
+            event.carId(), event.direction().name(), event.speedKmh());
         Debug.log("Sending " + json);
 
         HttpRequest request = HttpRequest.newBuilder(eventsUri)

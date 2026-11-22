@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
+import java.awt.FontMetrics;
 import javax.swing.JPanel;
 
 public class CityPanel extends JPanel {
@@ -26,7 +27,7 @@ public class CityPanel extends JPanel {
             map.height() * TILE_SIZE));
     }
 
-    @Override
+       @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         drawMap(g);
@@ -35,6 +36,7 @@ public class CityPanel extends JPanel {
         for (Car car : simulation.cars()) {
             drawCar(g, car);
         }
+        drawPointLabels(g);
     }
 
     private void drawMap(Graphics g) {
@@ -64,16 +66,14 @@ public class CityPanel extends JPanel {
         }
     }
 
-    private void drawMeasurementPoints(Graphics g) {
+        private void drawMeasurementPoints(Graphics g) {
         CityMap map = simulation.map();
         int line = POINT_LINE_THICKNESS;
-        g.setFont(g.getFont().deriveFont(Font.BOLD, 11f));
+        g.setColor(POINT_COLOR);
         for (MeasurementPoint point : simulation.points()) {
             int left = point.x() * TILE_SIZE;
             int top = point.y() * TILE_SIZE;
             char tile = map.tileAt(point.x(), point.y());
-
-            g.setColor(POINT_COLOR);
             if (tile == '-') {
                 // Vaakatie: pystysuora viiva tien poikki
                 g.fillRect(left + (TILE_SIZE - line) / 2, top, line, TILE_SIZE);
@@ -84,9 +84,24 @@ public class CityPanel extends JPanel {
                 // Risteys tai muu ruutu: kehys ruudun reunaan
                 g.drawRect(left + 1, top + 1, TILE_SIZE - 3, TILE_SIZE - 3);
             }
+        }
+    }
 
+    private void drawPointLabels(Graphics g) {
+        g.setFont(g.getFont().deriveFont(Font.BOLD, 11f));
+        FontMetrics metrics = g.getFontMetrics();
+        for (MeasurementPoint point : simulation.points()) {
+            String name = point.name();
+            int textWidth = metrics.stringWidth(name);
+            int x = point.x() * TILE_SIZE + 3;
+            int y = point.y() * TILE_SIZE + 12;
+            x = Math.max(2, Math.min(x, getWidth() - textWidth - 2));
+
+            g.setColor(new Color(0, 0, 0, 170));
+            g.fillRect(x - 2, y - metrics.getAscent(),
+                       textWidth + 4, metrics.getHeight());
             g.setColor(Color.WHITE);
-            g.drawString(String.valueOf(point.id()), left + 3, top + 12);
+            g.drawString(name, x, y);
         }
     }
 

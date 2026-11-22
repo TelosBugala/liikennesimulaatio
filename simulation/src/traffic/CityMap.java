@@ -2,6 +2,7 @@ package traffic;
 
 public class CityMap {
 
+    public static final int TILE_LENGTH_METERS = 70;
     private final String[] rows;
 
     public CityMap(String[] rows) {

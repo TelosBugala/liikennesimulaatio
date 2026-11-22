@@ -26,6 +26,13 @@ public class Car {
         return tick % moveEveryTicks == 0;
     }
 
+        // Nimellisnopeus km/h: ruudun pituus jaettuna ajalla, jonka auto käyttää yhteen ruutuun.
+    public int speedKmh() {
+        double seconds = (double) moveEveryTicks * SimTime.SECONDS_PER_TICK;
+        double metersPerSecond = CityMap.TILE_LENGTH_METERS / seconds;
+        return (int) Math.round(metersPerSecond * 3.6);
+    }
+    
     public boolean hasArrived() {
         return routeIndex >= route.size();
     }
