@@ -15,3 +15,6 @@ obj/
 
 # Windowsin apu­tiedostot
 Thumbs.db
+
+# Simulaation tallentamat mittauspisteet (ajonaikainen tila)
+measurement-points.txt*

@@ -24,6 +24,7 @@ public class Simulation {
     private final List<SpawnPoint> spawnPoints = new ArrayList<>();
     private int nextCarId = 1;
     private int nextPointId = 1;
+    private Runnable pointsChangedListener = () -> { };
     private int ticksUntilSpawn;
     private long tick = 0;
 
@@ -32,7 +33,6 @@ public class Simulation {
         this.eventListener = eventListener;
         this.planner = new RoutePlanner(map, random);
         createLights();
-        createPoints();
         createSpawnPoints();
         ticksUntilSpawn = nextSpawnDelay();
     }
@@ -47,11 +47,6 @@ public class Simulation {
         }
     }
 
-        private void createPoints() {
-        addPoint("Lehtotie", 1, 2);
-        addPoint("Koivutie", 10, 2);
-        addPoint("Kuusitie", 3, 4);
-    }
 
     private void createSpawnPoints() {
         for (int y = 0; y < map.height(); y++) {
@@ -183,16 +178,28 @@ public class Simulation {
         return false;
     }
 
-    public CityMap map() { return map; }
+        public CityMap map() { return map; }
     public List<Car> cars() { return cars; }
     public List<TrafficLight> lights() { return lights; }
     public List<MeasurementPoint> points() { return Collections.unmodifiableList(points); }
+    public int nextPointId() { return nextPointId; }
     public long tick() { return tick; }
     public LocalDateTime simTime() { return SimTime.at(tick); }
+
+    public void setPointsChangedListener(Runnable listener) {
+        this.pointsChangedListener = listener;
+    }
+
+    public void addDefaultPoints() {
+        addPoint("Lehtotie", 1, 2);
+        addPoint("Koivutie", 10, 2);
+        addPoint("Kuusitie", 3, 4);
+    }
 
     public MeasurementPoint addPoint(String name, int x, int y) {
         MeasurementPoint point = new MeasurementPoint(nextPointId++, name, x, y);
         points.add(point);
+        pointsChangedListener.run();
         return point;
     }
 
@@ -201,11 +208,14 @@ public class Simulation {
         if (index >= 0) {
             points.set(index,
                 new MeasurementPoint(point.id(), newName, point.x(), point.y()));
+            pointsChangedListener.run();
         }
     }
 
     public void removePoint(MeasurementPoint point) {
-        points.remove(point);
+        if (points.remove(point)) {
+            pointsChangedListener.run();
+        }
     }
 
     public MeasurementPoint pointAt(int x, int y) {
@@ -215,5 +225,23 @@ public class Simulation {
             }
         }
         return null;
+    }
+
+    // Palauttaa tallennetut pisteet käyttöön. Kelvottomat ohitetaan.
+    public void restorePoints(List<MeasurementPoint> restored, int nextId) {
+        points.clear();
+        int maxId = 0;
+        for (MeasurementPoint point : restored) {
+            maxId = Math.max(maxId, point.id());
+            boolean usable = map.isInside(point.x(), point.y())
+                && map.isRoad(point.x(), point.y())
+                && pointAt(point.x(), point.y()) == null;
+            if (usable) {
+                points.add(point);
+            } else {
+                System.err.println("Ignoring saved point: " + point);
+            }
+        }
+        nextPointId = Math.max(nextId, maxId + 1);
     }
 }
