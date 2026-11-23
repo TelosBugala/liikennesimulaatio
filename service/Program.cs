@@ -1,12 +1,15 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 
-const string connectionString = "Data Source=traffic.db";
-
-InitializeDatabase(connectionString);
-
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
+
+// Tietokannan sijainti tulee asetuksesta ConnectionStrings:Traffic.
+// Jos asetusta ei ole (tavallinen ajo), käytetään tiedostoa traffic.db.
+// Luku tehdään vasta Build-kutsun jälkeen, jotta myös testien antamat asetukset ehtivät mukaan.
+var connectionString = app.Configuration.GetConnectionString("Traffic") ?? "Data Source=traffic.db";
+
+InitializeDatabase(connectionString);
 
 app.MapGet("/", () => "Hello World!");
 
@@ -171,3 +174,7 @@ record EventDto(int? Tick, string? SimTime, int? PointId, string? PointName,
 
 record StoredEvent(int Id, int Tick, string SimTime, int PointId, string PointName,
                    int CarId, string Direction, int SpeedKmh, string ReceivedAt);
+
+// Tekee Program-luokasta näkyvän testiprojektille (WebApplicationFactory<Program>).
+// Ilman tätä rivi luokka olisi piilossa, koska ylimmän tason lauseet luovat sen automaattisesti ei-julkisena.
+public partial class Program { }

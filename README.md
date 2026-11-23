@@ -8,6 +8,7 @@ C#-palvelu tallentaa SQLite-tietokantaan.
  
 - `simulation/` – Java-simulaatio (Swing)
 - `service/` – C#-palvelu (ASP.NET Core) ja SQLite-tietokanta
+- `service.Tests/` – palvelun automaattiset testit (xUnit)
 - `docs/` – suunnitelmat ja dokumentaatio
 ```
 Java-simulaatio  --HTTP + JSON-->  C#-palvelu  --SQL-->  SQLite
@@ -15,11 +16,7 @@ Java-simulaatio  --HTTP + JSON-->  C#-palvelu  --SQL-->  SQLite
  
 ## Tila
  
-Simulaatio on valmis: autot ajavat kaksikaistaisessa ruudukossa
-liikennevaloissa, mittauspisteet tuottavat tapahtumia, ja palvelu tallentaa
-ne tietokantaan. Työn alla on palvelun puoli: tilastot tallennetusta datasta
-ja niiden katselu selaimessa. Tarkempi tila ja suunnitelma ovat tiedostossa
-`docs/design.md`.
+Simulaatio on valmis: autot ajavat kaksikaistaisessa ruudukossa liikennevaloissa, mittauspisteet tuottavat tapahtumia, ja palvelu tallentaa ne tietokantaan. Palvelun tallennus ja automaattiset testit ovat valmiit. Työn alla on tilastot tallennetusta datasta ja niiden katselu selaimessa. Tarkempi tila ja suunnitelma ovat tiedostossa docs/design.md.
  
 Kaikki toimii paikallisesti.
  
@@ -74,6 +71,15 @@ PowerShellissä asetus kirjoitetaan lainausmerkkien kanssa:
  
     java "-Dtraffic.debug=true" -cp out traffic.Main
  
+## Testit
+
+Palvelun automaattiset testit ajetaan komennolla:
+
+cd service.Tests
+dotnet test
+
+Pysäytä palvelu (dotnet run) ennen testien ajoa, koska käynnissä oleva palvelu lukitsee käännettävän tiedoston. Testit käynnistävät palvelun itse muistissa ja käyttävät väliaikaista tietokantaa, joten ne eivät koske service/traffic.db-tiedostoon.
+
 ## Portin vaihtaminen
  
 Jos portti on varattu, käynnistä molemmat samalla uudella portilla.

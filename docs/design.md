@@ -25,7 +25,8 @@ Tiedonkulku on yksisuuntainen: simulaatio lähettää tapahtumia, palvelu tallen
 | Simulaatio | `simulation/` | Java 25, Swing, ei Mavenia (käännös `javac`illa) |
 | Palvelu | `service/` | C#, ASP.NET Core minimal API (.NET 10) |
 | Tietokanta | `service/traffic.db` (sekä `-wal` ja `-shm`) | SQLite, ei versionhallinnassa |
- 
+| Palvelun testit | `service.Tests/` | C#, xUnit, WebApplicationFactory |
+
 ## Java-luokat
  
 Kansiossa `simulation/src/traffic/`:
@@ -153,11 +154,20 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Mittauspisteellä on nimi.** Tunniste (`id`) on avain, eikä sitä käytetä uudelleen. Nimi on 1–30 merkkiä (kirjaimia, numeroita, välilyöntejä ja tavuviivoja) ilman välilyöntejä alussa tai lopussa. Nimi validoidaan `MeasurementPoint`in konstruktorissa, joten virheellistä nimeä ei voi syntyä. Siksi JSON-kenttään ei tarvita pakotusta.
 - **Tapahtuman muoto.** Tapahtuma sisältää kentät `tick`, `simTime`, `pointId`, `pointName`, `carId`, `direction` ja `speedKmh`. Auton lähtö- ja määränpäätä ei lähetetä, koska oikeassa mittauksessa niitä ei tunnettaisi. Palvelu tallentaa kaikki kentät.
 - **Nopeus tapahtumassa on auton nimellisnopeus (km/h).** Se lasketaan `moveEveryTicks`ista, tickin pituudesta ja ruudun pituudesta (70 m, `CityMap.TILE_LENGTH_METERS`). Arvot ovat 50, 25 ja 17 km/h. Se ei kuvaa jonossa seisomista.
+### "Testit" osion "Tapahtumat ja yhteys palveluun"
+
+- **Testit ajetaan HTTP:n kautta.** Testi käynnistää palvelun muistissa (WebApplicationFactory<Program>, ei oikeaa porttia), lähettää pyyntöjä ja tarkistaa vastaukset. Näin testataan koko ketju (validointi, SQLite, vastaus) samalla tavalla kuin simulaatio sitä käyttää. Validointi ei ole erillisessä luokassa, koska erillinen yksikkötestaus ei tuonut tarpeeseen nähden lisäarvoa.
+- **Jokainen testi saa oman väliaikaisen tietokantatiedoston.** Tietokannan sijainti tulee asetuksesta ConnectionStrings:Traffic, ja oletuksena on Data Source=traffic.db. Testit antavat asetukselle väliaikaisen tiedoston, joka poistetaan testin jälkeen (myös -wal ja -shm). Asetus luetaan vasta Build()-kutsun jälkeen, jotta testien antama arvo ehtii mukaan. Näin testit eivät koske oikeaan tietokantaan eivätkä toisiinsa.
+- **Program-luokka on julkinen.** (public partial class Program { } tiedoston lopussa), jotta testiprojekti näkee sen.
+- **Testiprojekti on service.Tests/, service/-kansion vieressä.** (ei sen sisällä, koska palveluprojekti kääntäisi muuten testitiedostot mukaansa). Solution-tiedostoa (.sln) ei käytetä.
+- **Microsoft.AspNetCore.Mvc.Testing on versiossa 10.** NuGetin uusin vakaa versio (11.0.0) tukee vain .NET 11:tä, eikä sovi tähän projektiin.
+- **Testit ajetaan komennolla dotnet test kansiossa service.Tests/.** Ja palvelu pitää pysäyttää ensin, koska muuten käynnissä oleva palvelu lukitsee käännettävän tiedoston.
+- **Testit tarkistavat virheilmoitusten tarkan tekstin.** joten ilmoitusta muutettaessa testi pitää päivittää.
+
 ## Suunnitellut ratkaisut (vaihe 6, päätetty, ei vielä toteutettu)
  
 - **Tilastot lasketaan palvelussa SQL-kyselyillä** (`GROUP BY`), eikä katseluliittymässä. Tilastot käyttävät simulaatioaikaa (`sim_time`), eivät vastaanottoaikaa (`received_at`), koska simulaation nopeus vaihtelee.
 - **Tilastoja on kaksi:** pistekohtainen yhteenveto (ohitukset, keskinopeus ja suuntajakauma) ja tuntikohtaiset ohitusmäärät pisteittäin.
-- **Testit.** C#-testit xUnitilla, ja ne ajetaan väliaikaista tietokantaa vasten. Tietokannan sijainti tulee asetuksesta, jotta testit voivat käyttää omaa tiedostoaan.
 - **Katseluliittymä on yksi HTML-sivu**, jota palvelu tarjoaa osoitteessa `/`. Se käyttää pelkkää JavaScriptiä ja SVG:tä, ei ulkoisia kirjastoja eikä verkkopalveluja.
 - **Tilastot olettavat, että tietokanta sisältää yhden ajon.** Tietokanta nollataan ajojen välillä (ks. Tehdyt päätökset).
 - **Vuorokausirytmi tehdään viimeisenä.** Nyt syntymisväli on tasainen, joten tuntikohtainen kaavio on aluksi tasainen. Ruuhka-ajat lisätään simulaatioon vasta, kun tilastot on nähty (vaihe 6E).
@@ -180,6 +190,7 @@ Valmista:
  
 - C#-palvelu: `POST /events`, `GET /events`, SQLite-tallennus (WAL-tila).
 - C#-palvelu: tapahtuman kaikki kentät (sim_time, point_name ja speed_kmh) tallentuvat, palvelu validoi ne ja tauluun on indeksi (point_id, sim_time).
+- C#-palvelun automaattiset testit (xUnit, 72 testiä): vastaanotto, haku ja kaikki tarkistukset.
 - Java: ikkuna, joka piirtää kaupungin ruudukon (12 × 9 ruutua, kartta tekstirivinä).
 - Java: kaksikaistaiset tiet, oikeanpuoleinen liikenne ja kaistaviiva.
 - Java: autot syntyvät satunnaisesti kartan reunoilla, saavat satunnaisen määränpään ja lyhimmän reitin (`RoutePlanner`, leveyshaku), kääntyvät risteyksissä reitin mukaan ja poistuvat määränpäässään.
@@ -193,11 +204,10 @@ Simulaatio on valmis. Palvelu tallentaa toistaiseksi vain vanhat kentät.
  
 ## Seuraavat vaiheet
  
-Vaiheet 1–5 ja 6A on tehty (simulaatio).
+Vaiheet 1–5 ja 6A ja 6B on tehty (simulaatio).
  
 6. **Tietojen käsittely ja esitys.** Kukin osa kokeillaan ja commitoidaan erikseen:
 
-   - 6B. Automaattiset testit (C#, xUnit): vastaanotto, tarkistukset ja haku. Tietokannan sijainti siirretään asetukseksi, jotta testit voivat käyttää väliaikaista tietokantaa.
    - 6C. Tilastot: pistekohtainen yhteenveto ja tuntikohtaiset ohitusmäärät SQL-kyselyinä, testeineen.
    - 6D. Katseluliittymä: yksi HTML-sivu osoitteessa `/` (yhteenvetotaulukko, tuntikaavio ja viimeisimmät tapahtumat).
    - 6E. Vuorokausirytmi simulaatioon (ruuhka-ajat), kun tilastot on nähty.
