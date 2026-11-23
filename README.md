@@ -27,6 +27,7 @@ Kaikki toimii paikallisesti.
  
 - Java 25
 - .NET 10 SDK
+ 
 ## Ajaminen
  
 Palvelu:
@@ -42,6 +43,9 @@ Simulaatio (toisessa terminaalissa):
  
 Palvelu kuuntelee oletuksena osoitteessa `http://localhost:5256`, ja
 simulaatio lähettää tapahtumat sinne.
+ 
+Nollaa tietokanta ennen jokaista uutta simulaatioajoa, ettei eri ajojen data
+sekoitu (ks. "Tietokannan nollaus" alempana).
  
 Palvelun käsin testaus: `service/requests.http` sisältää valmiit pyynnöt.
 Tiedoston voi ajaa esimerkiksi VS Coden REST Client -lisäosalla tai
@@ -59,6 +63,7 @@ voi kokeilla myös selaimessa osoitteessa `http://localhost:5256/events`.
 - **Tallennus:** pisteet tallentuvat tiedostoon `measurement-points.txt`
   ohjelman käynnistyskansioon (`simulation/`) ja latautuvat käynnistyksessä.
   Tiedoston poistaminen palauttaa oletuspisteet.
+ 
 ## Debug-tulostus
  
 Normaalissa ajossa konsoliin tulostuu vain käynnistysrivit (palvelun osoite
@@ -85,6 +90,25 @@ konsoliin tulostuu virhe, jossa näkyy osoite, johon se yritti yhdistää.
  
 ## Tietokannan nollaus
  
-Pysäytä palvelu ja poista tiedostot `service/traffic.db`,
-`service/traffic.db-wal` ja `service/traffic.db-shm`. Palvelu luo uuden
-tietokannan käynnistyessään.
+Simulaatio alkaa joka käynnistyksellä alusta: tick on 0, autojen
+tunnisteet alkavat ykkösestä ja simulaatioaika alkaa maanantaista
+2026-01-05 kello 06:00. Jos tietokantaa ei tyhjennetä ajojen välillä, eri
+ajojen tapahtumat menevät päällekkäin samoille ajoille ja samoille
+auto-tunnisteille, eikä palvelu huomaa sitä. Tilastot (jos niitä lasketaan
+tallennetusta datasta) olisivat silloin virheellisiä. Siksi tietokanta
+nollataan ennen jokaista uutta ajoa.
+ 
+Pysäytä ensin palvelu (Ctrl+C sen terminaalissa) ja poista sitten
+tietokantatiedostot `service/`-kansiossa:
+ 
+    cd service
+    Remove-Item traffic.db, traffic.db-wal, traffic.db-shm -ErrorAction SilentlyContinue
+ 
+Komento on PowerShellille. Tietokanta koostuu kolmesta tiedostosta
+(`traffic.db` ja SQLiten WAL-tilan apufiletiedostot `-wal` ja `-shm`), ja
+kaikki kolme poistetaan. `-ErrorAction SilentlyContinue` estää virheilmoituksen,
+jos jokin tiedostoista puuttuu. Käynnistä sitten palvelu uudelleen
+(`dotnet run`): se luo uuden, tyhjän tietokannan.
+ 
+Nollaus tarvitaan myös silloin, kun taulun rakenne muuttuu, koska palvelu ei
+päivitä vanhaa taulua.

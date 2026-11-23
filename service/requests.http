@@ -1,16 +1,52 @@
 @baseUrl = http://localhost:5256
 
-### Valid event
+### Valid event (should return 201)
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{ "tick": 37, "simTime": "2026-01-05T06:03:05", "pointId": 1, "pointName": "Lehtotie", "carId": 2, "direction": "EAST", "speedKmh": 50 }
+
+### Valid event with Finnish characters in the name (check GET shows them correctly)
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{ "tick": 0, "simTime": "2026-01-05T06:00:00", "pointId": 2, "pointName": "Päätie-2", "carId": 1, "direction": "NORTH", "speedKmh": 17 }
+
+### Old-format event, new fields missing (should return 400 with several errors)
 POST {{baseUrl}}/events
 Content-Type: application/json
 
 { "tick": 1042, "pointId": 3, "carId": 17, "direction": "NORTH" }
 
+### Missing tick (should return 400: tick is required)
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{ "simTime": "2026-01-05T06:03:05", "pointId": 1, "pointName": "Lehtotie", "carId": 2, "direction": "EAST", "speedKmh": 50 }
+
 ### Invalid direction (should return 400)
 POST {{baseUrl}}/events
 Content-Type: application/json
 
-{ "tick": 1043, "pointId": 3, "carId": 18, "direction": "UP" }
+{ "tick": 43, "simTime": "2026-01-05T06:03:35", "pointId": 3, "carId": 18, "pointName": "Kuusitie", "direction": "UP", "speedKmh": 25 }
+
+### Invalid simTime, impossible date (should return 400)
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{ "tick": 45, "simTime": "2026-02-30T06:00:00", "pointId": 3, "carId": 18, "pointName": "Kuusitie", "direction": "WEST", "speedKmh": 50 }
+
+### Invalid pointName, trailing space (should return 400)
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{ "tick": 46, "simTime": "2026-01-05T06:03:50", "pointId": 3, "carId": 18, "pointName": "Kuusitie ", "direction": "WEST", "speedKmh": 50 }
+
+### Several errors at once (should return 400 listing all of them)
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{ "tick": -5, "simTime": "yesterday", "pointId": 0, "pointName": "", "carId": 0, "direction": "UP", "speedKmh": 99 }
 
 ### List latest events
 GET {{baseUrl}}/events

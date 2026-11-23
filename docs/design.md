@@ -58,18 +58,23 @@ Palvelu kuuntelee osoitteessa `http://localhost:5256` (portti on tiedostossa `se
 ### POST /events
  
 Tallentaa tapahtuman. Esimerkki:
- 
-```json
-{ "tick": 1042, "pointId": 3, "carId": 17, "direction": "NORTH" }
-```
- 
-- `direction` on yksi arvoista `NORTH`, `EAST`, `SOUTH`, `WEST`. Muu arvo tuottaa vastauksen 400 Bad Request.
-- Onnistunut tallennus vastaa 201 Created.
+
+json
+{ "tick": 37, "simTime": "2026-01-05T06:03:05", "pointId": 1, "pointName": "Lehtotie", "carId": 2, "direction": "EAST", "speedKmh": 50 }
+
+Kaikki kentät ovat pakollisia. Palvelu tarkistaa ne itse ja palauttaa 400 Bad Request, jos jokin ei kelpaa. Vastauksessa on kaikki virheet kerralla: { "errors": [ ... ] }.
+
+tick on vähintään 0, pointId ja carId vähintään 1.
+simTime on muodossa yyyy-MM-ddTHH:mm:ss ja oikea päivämäärä.
+pointName on 1–30 merkkiä (kirjaimia, numeroita, välilyöntejä ja tavuviivoja), ei välilyöntiä alussa tai lopussa.
+direction on NORTH, EAST, SOUTH tai WEST.
+
+Onnistunut tallennus vastaa 201 Created.
 ### GET /events
  
 Palauttaa 100 uusinta tapahtumaa, uusin ensin (200 OK).
  
-Simulaatio lähettää tapahtumassa jo lisäkentät `simTime`, `pointName` ja `speedKmh`. Palvelu ohittaa ne, kunnes se päivitetään vaiheessa 6A.
+Vastauksessa on kaikki tallennetut kentät.
  
 ## Tietokanta
  
@@ -79,10 +84,15 @@ Taulu `events`:
 |---|---|---|
 | `id` | INTEGER, pääavain | juokseva numero |
 | `tick` | INTEGER | simulaation aika tapahtumahetkellä |
+| `sim_time` | TEXT | simulaatioaika, ISO 8601 (esim. 2026-01-05T06:03:05) |
 | `point_id` | INTEGER | mittauspisteen tunniste |
+| `point_name` | TEXT | pisteen nimi tapahtumahetkellä |
 | `car_id` | INTEGER | auton tunniste |
 | `direction` | TEXT | ajosuunta pisteen ylitettäessä |
+| `speed_kmh` | TEXT | INTEGER | auton nimellisnopeus |
 | `received_at` | TEXT | vastaanottohetki (UTC), tietokanta täyttää itse |
+
+Indeksi idx_events_point_time on sarakkeille (point_id, sim_time). Se palvelee suunniteltuja tilastokyselyjä. Sen riittävyys tarkistetaan vaiheessa 6C.
  
 Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muuttuessa vanha tietokanta poistetaan (kaikki kolme tiedostoa: `traffic.db`, `traffic.db-wal` ja `traffic.db-shm`, kun palvelu ei ole käynnissä), ja palvelu luo uuden.
  
@@ -95,10 +105,14 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 ### Tallennus ja rajapinta
  
 - **Raakaa SQL:ää, ei Entity Frameworkia.** Pidetään tallennus näkyvänä ja yksinkertaisena. SQL-lauseet käyttävät parametreja (ei merkkijonojen liittämistä) SQL-injektion estämiseksi.
-- **Tick ja simulaatioaika kulkevat tapahtumassa mukana.** Simulaatio lähettää sekä tickin että simulaatioajan (`simTime`). Palvelu tallentaa simulaatioajan (`sim_time`) vaiheessa 6A. Tietokanta on kertakäyttöinen, joten sarakkeen lisääminen on helppoa tarpeen tullen.
+- **Tick ja simulaatioaika kulkevat tapahtumassa mukana ja tallentuvat.** Simulaatio lähettää sekä tickin että simulaatioajan (simTime), ja palvelu tallentaa molemmat (tick, sim_time). sim_time on tekstinä ISO 8601 -muodossa, jolloin aakkosjärjestys on aikajärjestys ja SQLiten aikafunktiot (strftime) ymmärtävät sen.
 - **Suunnalle ei ole oletusarvoa.** Puuttuva suunta on virhe, jonka halutaan näkyä heti.
 - **Aikaleima on ISO 8601 -muodossa, sekunnin tarkkuudella ja ilman aikavyöhykettä** (esimerkiksi `2026-01-05T08:15:30`). Se on simuloidun maailman paikallinen aika. JSON-aikaleima muotoillaan `DateTimeFormatter.ISO_LOCAL_DATE_TIME`illa, jotta sekunnit ovat aina mukana (`LocalDateTime.toString()` jättää ne pois, kun ne ovat nolla).
 - **SQLite käyttää WAL-tilaa ja `synchronous = NORMAL`-asetusta.** Yksi tapahtuma per pyyntö ja SQLiten oletustila (rollback journal) rajoittivat kirjoitusnopeutta niin, että simulaation nopeudella 16x pyynnöt ylittivät aikakatkaisun. WAL-tila (`PRAGMA journal_mode = WAL`) asetetaan tietokantaan kerran käynnistyksessä, ja `synchronous = NORMAL` jokaiselle yhteydelle (`OpenConnection`). Hinta: äkillinen sähkökatko voi hävittää viimeisimmät kirjoitukset, mutta tietokanta ei rikkoudu.
+- **Palvelu validoi kaiken itse.** Palvelu ei luota lähettäjään vaan tarkistaa jokaisen kentän (rajat ylhäällä kohdassa Rajapinta), vaikka simulaatio validoi pisteen nimen jo itse. Puuttuvat kentät ovat virhe, myös vanhan muotoisissa pyynnöissä, koska siitä halutaan näkyvän heti. Kentät on määritelty nullable-tyyppisinä (int?, string?), jotta puuttuva kenttä erottuu arvosta 0.
+- **Kaikki virheet palautetaan kerralla.** ({ "errors": [ ... ] }), koska se nopeuttaa kokeilua ja vika löytyy yhdellä pyynnöllä.
+- **Pisteen nimi tallennetaan jokaiseen tapahtumaan.** Nimeä voi muuttaa kesken ajon, joten tapahtuma kertoo nimen sellaisena kuin se oli tapahtumahetkellä. Tilastoissa pisteen avain on pointId, ei nimi.
+- **Ajot erotellaan nollaamalla tietokanta käsin.** Simulaatio alkaa joka käynnistyksellä alusta (tick 0, carId 1, sama alkuaika), joten usean ajon data sekoittuisi. Tietokanta poistetaan ajojen välillä (palvelu pysäytettynä, kolme tiedostoa). Ajotunniste (runId) tapahtumaan jätettiin pois, koska se vaatisi muutoksen Javaan ja tapahtuman muotoon. Sen voi lisätä myöhemmin omana vaiheenaan.
 ### Simulaation rakenne
  
 - **Kartta ja piirto erillään.** `CityMap` kuvaa kartan tietona, `Simulation` pitää kirjaa maailman tilasta ja `CityPanel` piirtää sen.
@@ -137,7 +151,7 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Palvelun osoite on `Main.java`ssa oletusarvona (`DEFAULT_SERVICE_URL`), ja sen voi ohittaa asetuksella `-Dtraffic.serviceUrl=...`.** Simulaatio ei lue palvelun `launchSettings.json`ia, koska se on `dotnet run` -kehityskäytön tiedosto eikä osa rajapintaa.
 - **Konsoli on tavallisessa ajossa hiljainen, ja debug-tila avaa lisätulostuksen.** Tavallisessa ajossa tulostuvat vain virheet (`System.err`) ja käynnistysrivit (palvelun osoite ja mittauspisteiden tiedosto). Asetuksella `-Dtraffic.debug=true` tulostetaan lisäksi autojen reitit ja palvelulle lähetettävät tapahtumat. Tulostus kulkee `Debug.log`in kautta, ja `EventSender` lokittaa lähettämänsä JSON:n.
 - **Mittauspisteellä on nimi.** Tunniste (`id`) on avain, eikä sitä käytetä uudelleen. Nimi on 1–30 merkkiä (kirjaimia, numeroita, välilyöntejä ja tavuviivoja) ilman välilyöntejä alussa tai lopussa. Nimi validoidaan `MeasurementPoint`in konstruktorissa, joten virheellistä nimeä ei voi syntyä. Siksi JSON-kenttään ei tarvita pakotusta.
-- **Tapahtuman muoto.** Tapahtuma sisältää kentät `tick`, `simTime`, `pointId`, `pointName`, `carId`, `direction` ja `speedKmh`. Auton lähtö- ja määränpäätä ei lähetetä, koska oikeassa mittauksessa niitä ei tunnettaisi. Palvelu ei ole vielä päivitetty: se ohittaa tuntemattomat kentät, joten uudet kentät eivät tallennu ennen vaihetta 6A.
+- **Tapahtuman muoto.** Tapahtuma sisältää kentät `tick`, `simTime`, `pointId`, `pointName`, `carId`, `direction` ja `speedKmh`. Auton lähtö- ja määränpäätä ei lähetetä, koska oikeassa mittauksessa niitä ei tunnettaisi. Palvelu tallentaa kaikki kentät.
 - **Nopeus tapahtumassa on auton nimellisnopeus (km/h).** Se lasketaan `moveEveryTicks`ista, tickin pituudesta ja ruudun pituudesta (70 m, `CityMap.TILE_LENGTH_METERS`). Arvot ovat 50, 25 ja 17 km/h. Se ei kuvaa jonossa seisomista.
 ## Suunnitellut ratkaisut (vaihe 6, päätetty, ei vielä toteutettu)
  
@@ -145,16 +159,17 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Tilastoja on kaksi:** pistekohtainen yhteenveto (ohitukset, keskinopeus ja suuntajakauma) ja tuntikohtaiset ohitusmäärät pisteittäin.
 - **Testit.** C#-testit xUnitilla, ja ne ajetaan väliaikaista tietokantaa vasten. Tietokannan sijainti tulee asetuksesta, jotta testit voivat käyttää omaa tiedostoaan.
 - **Katseluliittymä on yksi HTML-sivu**, jota palvelu tarjoaa osoitteessa `/`. Se käyttää pelkkää JavaScriptiä ja SVG:tä, ei ulkoisia kirjastoja eikä verkkopalveluja.
+- **Tilastot olettavat, että tietokanta sisältää yhden ajon.** Tietokanta nollataan ajojen välillä (ks. Tehdyt päätökset).
 - **Vuorokausirytmi tehdään viimeisenä.** Nyt syntymisväli on tasainen, joten tuntikohtainen kaavio on aluksi tasainen. Ruuhka-ajat lisätään simulaatioon vasta, kun tilastot on nähty (vaihe 6E).
 ## Tunnetut rajoitukset
  
+- **Ajojen sekoittuminen.** Jos tietokantaa ei nollata ajojen välillä, eri ajojen tapahtumat sekoittuvat samoille simulaatioajoille ja carId:t toistuvat, eikä palvelu huomaa sitä.
 - **Jumiutumisriski.** Kun autoja on paljon, ne voivat jonottaa ristiin niin, ettei kukaan pääse liikkeelle. Valot, rajoitettu syntymisväli ja "älä tuki risteystä" -sääntö vähentävät riskiä. Jos jumiutumista esiintyy, se ratkaistaan silloin.
 - **Nopeus tapahtumassa on nimellisnopeus, ei hetkellisnopeus.** Arvoja on vain kolme (50, 25 ja 17 km/h), joten keskinopeudet ovat sekoitus näistä.
 ## Väliaikaiset ratkaisut
  
-Nämä ovat käytössä nyt ja korvataan seuraavien vaiheiden aikana:
+Ei väliaikaisia ratkaisuja.
  
-- **Palvelu ohittaa tapahtuman uudet kentät** (`simTime`, `pointName` ja `speedKmh`), joten ne eivät tallennu. Korvautuu vaiheessa 6A.
 ## Ajaminen
  
 Palvelun ja simulaation ajo-ohjeet, portin vaihtaminen ja debug-asetus ovat tiedostossa `README.md`.
@@ -164,6 +179,7 @@ Palvelun ja simulaation ajo-ohjeet, portin vaihtaminen ja debug-asetus ovat tied
 Valmista:
  
 - C#-palvelu: `POST /events`, `GET /events`, SQLite-tallennus (WAL-tila).
+- C#-palvelu: tapahtuman kaikki kentät (sim_time, point_name ja speed_kmh) tallentuvat, palvelu validoi ne ja tauluun on indeksi (point_id, sim_time).
 - Java: ikkuna, joka piirtää kaupungin ruudukon (12 × 9 ruutua, kartta tekstirivinä).
 - Java: kaksikaistaiset tiet, oikeanpuoleinen liikenne ja kaistaviiva.
 - Java: autot syntyvät satunnaisesti kartan reunoilla, saavat satunnaisen määränpään ja lyhimmän reitin (`RoutePlanner`, leveyshaku), kääntyvät risteyksissä reitin mukaan ja poistuvat määränpäässään.
@@ -172,14 +188,15 @@ Valmista:
 - Java: simulaatiolla on oma aika (yksi tick on 5 sekuntia), joka näkyy ikkunan yläpalkissa, ja nopeutta voi säätää (Pause, Slower ja Faster, 0,5x–32x).
 - Java: mittauspisteillä on nimet, ja ne piirretään kartalle. Pisteitä voi lisätä, nimetä uudelleen ja poistaa hiirellä ohjelman käydessä, ja ne tallentuvat tiedostoon ja latautuvat käynnistyksessä.
 - Java: `EventSender` lähettää tapahtumat (mukana `simTime`, `pointName` ja `speedKmh`) palvelulle, ja ne tallentuvat tietokantaan. Koko ketju Java → HTTP → C# → SQLite toimii.
+
 Simulaatio on valmis. Palvelu tallentaa toistaiseksi vain vanhat kentät.
  
 ## Seuraavat vaiheet
  
-Vaiheet 1–5 on tehty (simulaatio).
+Vaiheet 1–5 ja 6A on tehty (simulaatio).
  
 6. **Tietojen käsittely ja esitys.** Kukin osa kokeillaan ja commitoidaan erikseen:
-   - 6A. Palvelun uudet kentät. Tietokantaan sarakkeet `sim_time`, `point_name` ja `speed_kmh`, uusien kenttien tarkistukset, indeksit kyselyjä varten ja päivitetty `requests.http`. Vanha tietokanta poistetaan, ja palvelu luo uuden.
+
    - 6B. Automaattiset testit (C#, xUnit): vastaanotto, tarkistukset ja haku. Tietokannan sijainti siirretään asetukseksi, jotta testit voivat käyttää väliaikaista tietokantaa.
    - 6C. Tilastot: pistekohtainen yhteenveto ja tuntikohtaiset ohitusmäärät SQL-kyselyinä, testeineen.
    - 6D. Katseluliittymä: yksi HTML-sivu osoitteessa `/` (yhteenvetotaulukko, tuntikaavio ja viimeisimmät tapahtumat).
