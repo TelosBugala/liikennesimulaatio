@@ -50,3 +50,9 @@ Content-Type: application/json
 
 ### List latest events
 GET {{baseUrl}}/events
+
+### Statistics per measurement point
+GET {{baseUrl}}/stats/points
+
+### Hourly pass counts per measurement point
+GET {{baseUrl}}/stats/hourly

@@ -73,6 +73,18 @@ app.MapGet("/events", () =>
     return Results.Ok(events);
 });
 
+app.MapGet("/stats/points", () =>
+{
+    using var connection = OpenConnection(connectionString);
+    return Results.Ok(Statistics.GetPointSummaries(connection));
+});
+
+app.MapGet("/stats/hourly", () =>
+{
+    using var connection = OpenConnection(connectionString);
+    return Results.Ok(Statistics.GetHourlyCounts(connection));
+});
+
 app.Run();
 
 // Palauttaa listan virheistä. Tyhjä lista tarkoittaa, että tapahtuma on kelvollinen.

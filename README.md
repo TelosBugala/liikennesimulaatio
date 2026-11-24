@@ -16,7 +16,7 @@ Java-simulaatio  --HTTP + JSON-->  C#-palvelu  --SQL-->  SQLite
  
 ## Tila
  
-Simulaatio on valmis: autot ajavat kaksikaistaisessa ruudukossa liikennevaloissa, mittauspisteet tuottavat tapahtumia, ja palvelu tallentaa ne tietokantaan. Palvelun tallennus ja automaattiset testit ovat valmiit. Työn alla on tilastot tallennetusta datasta ja niiden katselu selaimessa. Tarkempi tila ja suunnitelma ovat tiedostossa docs/design.md.
+Simulaatio on valmis: autot ajavat kaksikaistaisessa ruudukossa liikennevaloissa, mittauspisteet tuottavat tapahtumia, ja palvelu tallentaa ne tietokantaan. Palvelun tallennus, tilastot ja automaattiset testit ovat valmiit. Työn alla on tilastojen katselu selaimessa. Tarkempi tila ja suunnitelma ovat tiedostossa docs/design.md.
  
 Kaikki toimii paikallisesti.
  
@@ -79,6 +79,15 @@ cd service.Tests
 dotnet test
 
 Pysäytä palvelu (dotnet run) ennen testien ajoa, koska käynnissä oleva palvelu lukitsee käännettävän tiedoston. Testit käynnistävät palvelun itse muistissa ja käyttävät väliaikaista tietokantaa, joten ne eivät koske service/traffic.db-tiedostoon.
+
+## Tilastot
+
+Palvelu laskee tallennetuista tapahtumista kaksi tilastoa, jotka voi avata selaimessa tai requests.http:llä:
+
+http://localhost:5256/stats/points – pistekohtainen yhteenveto (ohitukset, keskinopeus ja suuntajakauma)
+http://localhost:5256/stats/hourly – ohitusmäärät pisteittäin ja tunneittain simulaatioajan mukaan
+
+Tilastot olettavat, että tietokanta sisältää yhden ajon, joten nollaa tietokanta ennen uutta ajoa (ks. "Tietokannan nollaus").
 
 ## Portin vaihtaminen
  

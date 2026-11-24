@@ -77,6 +77,29 @@ Palauttaa 100 uusinta tapahtumaa, uusin ensin (200 OK).
  
 Vastauksessa on kaikki tallennetut kentät.
  
+### GET /stats/points
+
+Palauttaa pistekohtaisen yhteenvedon: yksi rivi jokaista mittauspistettä (pointId) kohden, järjestettynä pointId:n mukaan (200 OK). Esimerkki:
+
+json
+[
+  { "pointId": 1, "pointName": "Lehtotie", "passCount": 412, "averageSpeedKmh": 31.4,
+    "directions": { "north": 12, "east": 200, "south": 8, "west": 192 } }
+]
+
+pointName on pisteen uusin nimi simulaatioajan mukaan. passCount on ohitusten määrä. averageSpeedKmh on ohitusten nimellisnopeuksien keskiarvo yhden desimaalin tarkkuudella. directions kertoo ohitusten määrän suunnittain (0, jos suuntaan ei ole ohituksia). Tyhjä tietokanta palauttaa tyhjän listan. Piste, jonka ohi ei ole ajanut yksikään auto, ei näy, koska palvelu tuntee pisteet vain tapahtumista.
+
+### GET /stats/hourly
+
+Palauttaa ohitusmäärät pisteittäin ja tunneittain: yksi rivi jokaista pisteen ja tasatunnin yhdistelmää kohden (200 OK), järjestettynä pointId:n ja hourStart:in mukaan. Esimerkki:
+
+json
+[
+  { "pointId": 1, "pointName": "Lehtotie", "hourStart": "2026-01-05T06:00:00", "passCount": 37 }
+]
+
+hourStart on tunnin alku simulaatioaikana (ISO 8601, ilman aikavyöhykettä). Eri päivien samat kellonajat ovat eri rivejä. Tunnit, joissa ei ollut ohituksia, eivät ole mukana. pointName on sama uusin nimi kuin pistekohtaisessa yhteenvedossa.
+
 ## Tietokanta
  
 Taulu `events`:
@@ -93,7 +116,7 @@ Taulu `events`:
 | `speed_kmh` | TEXT | INTEGER | auton nimellisnopeus |
 | `received_at` | TEXT | vastaanottohetki (UTC), tietokanta täyttää itse |
 
-Indeksi idx_events_point_time on sarakkeille (point_id, sim_time). Se palvelee suunniteltuja tilastokyselyjä. Sen riittävyys tarkistetaan vaiheessa 6C.
+Indeksi idx_events_point_time on sarakkeille (point_id, sim_time). Se palvelee suunniteltuja tilastokyselyjä. Sen riittävyys on mitattu vaiheessa 6C (ks. Tehdyt päätökset → Tilastot), ja lisäindeksejä ei tarvita.
  
 Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muuttuessa vanha tietokanta poistetaan (kaikki kolme tiedostoa: `traffic.db`, `traffic.db-wal` ja `traffic.db-shm`, kun palvelu ei ole käynnissä), ja palvelu luo uuden.
  
@@ -154,26 +177,34 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Mittauspisteellä on nimi.** Tunniste (`id`) on avain, eikä sitä käytetä uudelleen. Nimi on 1–30 merkkiä (kirjaimia, numeroita, välilyöntejä ja tavuviivoja) ilman välilyöntejä alussa tai lopussa. Nimi validoidaan `MeasurementPoint`in konstruktorissa, joten virheellistä nimeä ei voi syntyä. Siksi JSON-kenttään ei tarvita pakotusta.
 - **Tapahtuman muoto.** Tapahtuma sisältää kentät `tick`, `simTime`, `pointId`, `pointName`, `carId`, `direction` ja `speedKmh`. Auton lähtö- ja määränpäätä ei lähetetä, koska oikeassa mittauksessa niitä ei tunnettaisi. Palvelu tallentaa kaikki kentät.
 - **Nopeus tapahtumassa on auton nimellisnopeus (km/h).** Se lasketaan `moveEveryTicks`ista, tickin pituudesta ja ruudun pituudesta (70 m, `CityMap.TILE_LENGTH_METERS`). Arvot ovat 50, 25 ja 17 km/h. Se ei kuvaa jonossa seisomista.
-### "Testit" osion "Tapahtumat ja yhteys palveluun"
 
-- **Testit ajetaan HTTP:n kautta.** Testi käynnistää palvelun muistissa (WebApplicationFactory<Program>, ei oikeaa porttia), lähettää pyyntöjä ja tarkistaa vastaukset. Näin testataan koko ketju (validointi, SQLite, vastaus) samalla tavalla kuin simulaatio sitä käyttää. Validointi ei ole erillisessä luokassa, koska erillinen yksikkötestaus ei tuonut tarpeeseen nähden lisäarvoa.
-- **Jokainen testi saa oman väliaikaisen tietokantatiedoston.** Tietokannan sijainti tulee asetuksesta ConnectionStrings:Traffic, ja oletuksena on Data Source=traffic.db. Testit antavat asetukselle väliaikaisen tiedoston, joka poistetaan testin jälkeen (myös -wal ja -shm). Asetus luetaan vasta Build()-kutsun jälkeen, jotta testien antama arvo ehtii mukaan. Näin testit eivät koske oikeaan tietokantaan eivätkä toisiinsa.
-- **Program-luokka on julkinen.** (public partial class Program { } tiedoston lopussa), jotta testiprojekti näkee sen.
-- **Testiprojekti on service.Tests/, service/-kansion vieressä.** (ei sen sisällä, koska palveluprojekti kääntäisi muuten testitiedostot mukaansa). Solution-tiedostoa (.sln) ei käytetä.
-- **Microsoft.AspNetCore.Mvc.Testing on versiossa 10.** NuGetin uusin vakaa versio (11.0.0) tukee vain .NET 11:tä, eikä sovi tähän projektiin.
-- **Testit ajetaan komennolla dotnet test kansiossa service.Tests/.** Ja palvelu pitää pysäyttää ensin, koska muuten käynnissä oleva palvelu lukitsee käännettävän tiedoston.
-- **Testit tarkistavat virheilmoitusten tarkan tekstin.** joten ilmoitusta muutettaessa testi pitää päivittää.
+### Tilastot
 
-## Suunnitellut ratkaisut (vaihe 6, päätetty, ei vielä toteutettu)
+- **Tilastot lasketaan palvelussa SQL-kyselyillä.** Laskenta tehdään `GROUP BY`-ryhmittelyllä eikä katseluliittymässä. Kyselyt ovat tiedostossa `Statistics.cs`, ja luokka saa valmiin tietokantayhteyden parametrina. Tilastot käyttävät simulaatioaikaa (`sim_time`), eivät vastaanottoaikaa (`received_at`), koska simulaation nopeus vaihtelee.
+- **Pisteen nimi on uusin nimi simulaatioajan mukaan.** Nimi valitaan järjestyksellä `ORDER BY sim_time DESC, id DESC`, ei saapumisjärjestyksen mukaan, koska tapahtumat lähetetään asynkronisesti ja ne voivat saapua väärässä järjestyksessä. Samalla ajalla myöhemmin tallennettu nimi voittaa. Nimen hakuun käytetään yhteistä kyselyn osaa, joten molemmissa tilastoissa nimi valitaan samalla säännöllä. Koska palvelu tuntee nimet vain tapahtumista, uusi nimi näkyy tilastoissa vasta, kun pisteen ohi ajaa auto nimenvaihdon jälkeen.
+- **Tunnit jaotellaan tasatunnin ja päivämäärän mukaan.** Rivin avain on `hourStart` (esim. `2026-01-05T06:00:00`). Kellonajan mukaan yhdistäminen (kaikki päivät yhteen) onnistuu jälkikäteen datasta, mutta päinvastoin ei, joten tarkempi jaottelu valittiin. Tunteja, joissa ei ollut ohituksia, ei palauteta. Vaiheessa 6D katseluliittymä täyttää ne nollilla.
+- **Keskinopeus on ohitusten nimellisnopeuksien keskiarvo.** Se pyöristetään yhteen desimaaliin SQL:ssä.
+- **Indeksin riittävyys mitattiin.** Kyselyt ajettiin väliaikaisella testillä 200 000 tekaistulla tapahtumalla (3 pistettä ja noin 28 tuntia simulaatioaikaa, eli 84 pisteen ja tunnin yhdistelmää), ja testi poistettiin mittauksen jälkeen. Indeksin `(point_id, sim_time)` kanssa pistekohtainen yhteenveto kesti noin 90–100 ms ja tuntikohtainen noin 160–190 ms. Ilman indeksiä ajat olivat noin 140–150 ms ja noin 2,1–2,3 s. Ero on suurin tuntikyselyssä ja tulee pisteen nimen alikyselystä: indeksin kanssa se hakee pisteen rivit suoraan (`SEARCH ... point_id=?`), ilman indeksiä se lukee koko taulun jokaiselle ryhmälle erikseen (tuntikyselyssä 84 kertaa). **Päätös: nykyinen indeksi riittää, eikä lisäindeksejä tehdä.** Jokainen lisäindeksi hidastaisi jokaista kirjoitusta (palvelu vastaanottaa kymmeniä tapahtumia sekunnissa nopeudella 32x), eikä tarve ole osoitettu. Mittaus on tehty tekaistulla datalla yhdellä koneella ilman rinnakkaisia pyyntöjä.
+
+### Testit
+
+- **Testit ajetaan HTTP:n kautta.** Testi käynnistää palvelun muistissa (`WebApplicationFactory<Program>`, ei oikeaa porttia), lähettää pyyntöjä ja tarkistaa vastaukset. Näin testataan koko ketju (validointi, SQLite, vastaus) samalla tavalla kuin simulaatio sitä käyttää. Validointi ei ole erillisessä luokassa, koska erillinen yksikkötestaus ei tuonut tarpeeseen nähden lisäarvoa.
+- **Jokainen testi saa oman väliaikaisen tietokantatiedoston.** Tietokannan sijainti tulee asetuksesta `ConnectionStrings:Traffic`, ja oletuksena on `Data Source=traffic.db`. Testit antavat asetukselle väliaikaisen tiedoston, joka poistetaan testin jälkeen (myös `-wal` ja `-shm`). Asetus luetaan vasta `Build()`-kutsun jälkeen, jotta testien antama arvo ehtii mukaan. Näin testit eivät koske oikeaan tietokantaan eivätkä toisiinsa.
+- **`Program`-luokka on julkinen.** Tiedoston lopussa oleva rivi `public partial class Program { }` tekee luokan näkyväksi testiprojektille.
+- **Testiprojekti on `service.Tests/`, `service/`-kansion vieressä.** Se ei voi olla `service/`:n sisällä, koska palveluprojekti kääntäisi silloin testitiedostot mukaansa. Solution-tiedostoa (`.sln`) ei käytetä.
+- **`Microsoft.AspNetCore.Mvc.Testing` on versiossa `10.*`.** NuGetin uusin vakaa versio (11.0.0) tukee vain .NET 11:tä eikä sovi tähän projektiin.
+- **Testit ajetaan komennolla `dotnet test` kansiossa `service.Tests/`.** Palvelu pitää pysäyttää ensin, koska muuten käynnissä oleva palvelu lukitsee käännettävän tiedoston.
+- **Testit tarkistavat virheilmoitusten tarkan tekstin.** Siksi ilmoitusta muutettaessa testi pitää päivittää.
+
+## Suunnitellut ratkaisut (vaihe 6D–6E, päätetty, ei vielä toteutettu))
  
-- **Tilastot lasketaan palvelussa SQL-kyselyillä** (`GROUP BY`), eikä katseluliittymässä. Tilastot käyttävät simulaatioaikaa (`sim_time`), eivät vastaanottoaikaa (`received_at`), koska simulaation nopeus vaihtelee.
-- **Tilastoja on kaksi:** pistekohtainen yhteenveto (ohitukset, keskinopeus ja suuntajakauma) ja tuntikohtaiset ohitusmäärät pisteittäin.
 - **Katseluliittymä on yksi HTML-sivu**, jota palvelu tarjoaa osoitteessa `/`. Se käyttää pelkkää JavaScriptiä ja SVG:tä, ei ulkoisia kirjastoja eikä verkkopalveluja.
 - **Tilastot olettavat, että tietokanta sisältää yhden ajon.** Tietokanta nollataan ajojen välillä (ks. Tehdyt päätökset).
 - **Vuorokausirytmi tehdään viimeisenä.** Nyt syntymisväli on tasainen, joten tuntikohtainen kaavio on aluksi tasainen. Ruuhka-ajat lisätään simulaatioon vasta, kun tilastot on nähty (vaihe 6E).
 ## Tunnetut rajoitukset
  
 - **Ajojen sekoittuminen.** Jos tietokantaa ei nollata ajojen välillä, eri ajojen tapahtumat sekoittuvat samoille simulaatioajoille ja carId:t toistuvat, eikä palvelu huomaa sitä.
+- **Tilastokyselyt lukevat koko taulun,** joten niiden kesto kasvaa suunnilleen rivimäärän mukana (200 000 rivillä alle 0,2 s). Tuloksia ei välimuistiteta. Jos data kasvaa moninkertaiseksi, ratkaisuksi tulee silloin harkita esimerkiksi esilaskettuja yhteenvetoja.
 - **Jumiutumisriski.** Kun autoja on paljon, ne voivat jonottaa ristiin niin, ettei kukaan pääse liikkeelle. Valot, rajoitettu syntymisväli ja "älä tuki risteystä" -sääntö vähentävät riskiä. Jos jumiutumista esiintyy, se ratkaistaan silloin.
 - **Nopeus tapahtumassa on nimellisnopeus, ei hetkellisnopeus.** Arvoja on vain kolme (50, 25 ja 17 km/h), joten keskinopeudet ovat sekoitus näistä.
 ## Väliaikaiset ratkaisut
@@ -190,7 +221,8 @@ Valmista:
  
 - C#-palvelu: `POST /events`, `GET /events`, SQLite-tallennus (WAL-tila).
 - C#-palvelu: tapahtuman kaikki kentät (sim_time, point_name ja speed_kmh) tallentuvat, palvelu validoi ne ja tauluun on indeksi (point_id, sim_time).
-- C#-palvelun automaattiset testit (xUnit, 72 testiä): vastaanotto, haku ja kaikki tarkistukset.
+- C#-palvelun automaattiset testit (xUnit, 87 testiä): vastaanotto, haku, kaikki tarkistukset ja tilastot.
+- C#-palvelu: tilastot GET /stats/points (ohitukset, keskinopeus, suuntajakauma) ja GET /stats/hourly (ohitukset tunneittain), laskettu SQL:llä simulaatioajan mukaan.
 - Java: ikkuna, joka piirtää kaupungin ruudukon (12 × 9 ruutua, kartta tekstirivinä).
 - Java: kaksikaistaiset tiet, oikeanpuoleinen liikenne ja kaistaviiva.
 - Java: autot syntyvät satunnaisesti kartan reunoilla, saavat satunnaisen määränpään ja lyhimmän reitin (`RoutePlanner`, leveyshaku), kääntyvät risteyksissä reitin mukaan ja poistuvat määränpäässään.
@@ -200,11 +232,11 @@ Valmista:
 - Java: mittauspisteillä on nimet, ja ne piirretään kartalle. Pisteitä voi lisätä, nimetä uudelleen ja poistaa hiirellä ohjelman käydessä, ja ne tallentuvat tiedostoon ja latautuvat käynnistyksessä.
 - Java: `EventSender` lähettää tapahtumat (mukana `simTime`, `pointName` ja `speedKmh`) palvelulle, ja ne tallentuvat tietokantaan. Koko ketju Java → HTTP → C# → SQLite toimii.
 
-Simulaatio on valmis. Palvelu tallentaa toistaiseksi vain vanhat kentät.
+Simulaatio, palvelun tallennus, tilastot ja palvelun testit ovat valmiita. Jäljellä on katseluliittymä.
  
 ## Seuraavat vaiheet
  
-Vaiheet 1–5 ja 6A ja 6B on tehty (simulaatio).
+Vaiheet 1–5 ja 6A-6C on tehty.
  
 6. **Tietojen käsittely ja esitys.** Kukin osa kokeillaan ja commitoidaan erikseen:
 
