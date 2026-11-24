@@ -1,56 +1,68 @@
 # Liikennesimulaatio
- 
+
 Yksinkertainen ruutukaupunkisimulaatio, jossa suorakulmioautot liikkuvat
 pääsuuntiin. Auton ohittaessa mittauspisteen syntyy tapahtuma, jonka
 C#-palvelu tallentaa SQLite-tietokantaan.
- 
+
 ## Rakenne
- 
+
 - `simulation/` – Java-simulaatio (Swing)
-- `service/` – C#-palvelu (ASP.NET Core) ja SQLite-tietokanta
+- `service/` – C#-palvelu (ASP.NET Core), SQLite-tietokanta ja katseluliittymä (`wwwroot/index.html`)
 - `service.Tests/` – palvelun automaattiset testit (xUnit)
 - `docs/` – suunnitelmat ja dokumentaatio
+
 ```
 Java-simulaatio  --HTTP + JSON-->  C#-palvelu  --SQL-->  SQLite
 ```
- 
+
 ## Tila
- 
-Simulaatio, palvelu ja katseluliittymä ovat valmiita: autot ajavat kaksikaistaisessa ruudukossa liikennevaloissa, mittauspisteet tuottavat tapahtumia, palvelu tallentaa ne tietokantaan ja laskee niistä tilastoja, ja tilastoja voi katsella selaimessa. Jäljellä on vuorokausirytmi simulaatioon (ruuhka-ajat). Tarkempi tila ja suunnitelma ovat tiedostossa docs/design.md.
- 
+
+Ohjelma on valmis ja toimiva: autot ajavat kaksikaistaisessa ruudukossa
+liikennevaloissa, mittauspisteet tuottavat tapahtumia, palvelu tallentaa ne
+tietokantaan ja laskee niistä tilastoja, ja tilastoja voi katsella selaimessa.
+
+Autoja syntyy tasaisesti, joten tuntikaavion viivat ovat suunnilleen
+tasaisia. Vuorokausirytmi (ruuhka-ajat) on suunniteltu valinnaiseksi lisäksi,
+jonka ainoa tarkoitus on tehdä kaavioista mielenkiintoisempia. Se ei ole
+mukana tässä versiossa. Tarkempi tila ja suunnitelma ovat tiedostossa
+`docs/design.md`.
+
 Kaikki toimii paikallisesti.
- 
+
 ## Vaatimukset
- 
+
 - Java 25
 - .NET 10 SDK
- 
+
+Esimerkkikomennot on kirjoitettu Windowsin PowerShelliä varten.
+
 ## Ajaminen
- 
+
 Palvelu:
- 
+
     cd service
     dotnet run
- 
+
 Simulaatio (toisessa terminaalissa):
- 
+
     cd simulation
     javac -d out -sourcepath src src/traffic/Main.java
     java -cp out traffic.Main
- 
+
 Palvelu kuuntelee oletuksena osoitteessa `http://localhost:5256`, ja
-simulaatio lähettää tapahtumat sinne.
- 
+simulaatio lähettää tapahtumat sinne. Tilastosivun avaaminen selaimessa on
+kuvattu kohdassa "Tilastot ja katseluliittymä".
+
 Nollaa tietokanta ennen jokaista uutta simulaatioajoa, ettei eri ajojen data
 sekoitu (ks. "Tietokannan nollaus" alempana).
- 
+
 Palvelun käsin testaus: `service/requests.http` sisältää valmiit pyynnöt.
 Tiedoston voi ajaa esimerkiksi VS Coden REST Client -lisäosalla tai
 JetBrains-ohjelmistojen ja Visual Studion omalla HTTP-tuella. GET-pyynnön
 voi kokeilla myös selaimessa osoitteessa `http://localhost:5256/events`.
- 
+
 ## Käyttö
- 
+
 - **Nopeus:** yläpalkin painikkeilla Slower ja Faster simulaation nopeus on
   0,5x–32x, ja Pause pysäyttää simulaation. Kello näyttää simulaatioajan
   (yksi tick on 5 sekuntia).
@@ -60,73 +72,85 @@ voi kokeilla myös selaimessa osoitteessa `http://localhost:5256/events`.
 - **Tallennus:** pisteet tallentuvat tiedostoon `measurement-points.txt`
   ohjelman käynnistyskansioon (`simulation/`) ja latautuvat käynnistyksessä.
   Tiedoston poistaminen palauttaa oletuspisteet.
- 
+
+## Tilastot ja katseluliittymä
+
+Kun palvelu ja simulaatio ovat käynnissä, avaa selaimessa osoite
+`http://localhost:5256/` (`dotnet run` ei avaa selainta itse). Sivu näyttää
+pistekohtaisen yhteenvedon, ohitukset tunneittain viivakaaviona ja
+viimeisimmät tapahtumat, ja se päivittyy itsestään viiden sekunnin välein.
+Sivu ei käytä ulkoisia kirjastoja.
+
+Samat tiedot saa JSON-muodossa suoraan palvelusta:
+
+- `http://localhost:5256/stats/points` – pistekohtainen yhteenveto
+  (ohitukset, keskinopeus ja suuntajakauma)
+- `http://localhost:5256/stats/hourly` – ohitusmäärät pisteittäin ja
+  tunneittain simulaatioajan mukaan
+- `http://localhost:5256/events` – 100 uusinta tapahtumaa
+
+Tilastot olettavat, että tietokanta sisältää yhden ajon, joten nollaa
+tietokanta ennen uutta ajoa (ks. "Tietokannan nollaus").
+
+## Testit
+
+Palvelun automaattiset testit ajetaan komennolla:
+
+    cd service.Tests
+    dotnet test
+
+Pysäytä palvelu (`dotnet run`) ennen testien ajoa, koska käynnissä oleva
+palvelu lukitsee käännettävän tiedoston. Testit käynnistävät palvelun itse
+muistissa ja käyttävät väliaikaista tietokantaa, joten ne eivät koske
+`service/traffic.db`-tiedostoon.
+
 ## Debug-tulostus
- 
+
 Normaalissa ajossa konsoliin tulostuu vain käynnistysrivit (palvelun osoite
 ja mittauspisteiden tiedosto) ja mahdolliset virheet. Käynnistämällä
 simulaation asetuksella `-Dtraffic.debug=true` konsoliin tulostetaan lisäksi
 jokaisen syntyvän auton reitti ja jokainen palvelulle lähetettävä tapahtuma.
 PowerShellissä asetus kirjoitetaan lainausmerkkien kanssa:
- 
+
     java "-Dtraffic.debug=true" -cp out traffic.Main
- 
-## Testit
-
-Palvelun automaattiset testit ajetaan komennolla:
-
-cd service.Tests
-dotnet test
-
-Pysäytä palvelu (dotnet run) ennen testien ajoa, koska käynnissä oleva palvelu lukitsee käännettävän tiedoston. Testit käynnistävät palvelun itse muistissa ja käyttävät väliaikaista tietokantaa, joten ne eivät koske service/traffic.db-tiedostoon.
-
-## Tilastot ja katseluliittymä
-
-Kun palvelu ja simulaatio ovat käynnissä, avaa selaimessa osoite http://localhost:5256/ (dotnet run ei avaa selainta itse). Sivu näyttää pistekohtaisen yhteenvedon, ohitukset tunneittain viivakaaviona ja viimeisimmät tapahtumat, ja se päivittyy itsestään viiden sekunnin välein. Sivu ei käytä ulkoisia kirjastoja.
-
-Samat tiedot saa JSON-muodossa suoraan palvelusta:
-
-http://localhost:5256/stats/points – pistekohtainen yhteenveto (ohitukset, keskinopeus ja suuntajakauma)
-http://localhost:5256/stats/hourly – ohitusmäärät pisteittäin ja tunneittain simulaatioajan mukaan
-http://localhost:5256/events – 100 uusinta tapahtumaa
-
-Tilastot olettavat, että tietokanta sisältää yhden ajon, joten nollaa tietokanta ennen uutta ajoa (ks. "Tietokannan nollaus").
 
 ## Portin vaihtaminen
- 
+
 Jos portti on varattu, käynnistä molemmat samalla uudella portilla.
 Esimerkki portilla 5300:
- 
+
     cd service
     dotnet run --urls http://localhost:5300
- 
+
     cd simulation
     java "-Dtraffic.serviceUrl=http://localhost:5300" -cp out traffic.Main
- 
+
 Molempien osoitteiden pitää täsmätä. Jos simulaatio ei saa yhteyttä,
 konsoliin tulostuu virhe, jossa näkyy osoite, johon se yritti yhdistää.
- 
+Tilastosivu avataan silloin uudessa osoitteessa (esimerkiksi
+`http://localhost:5300/`).
+
 ## Tietokannan nollaus
- 
+
 Simulaatio alkaa joka käynnistyksellä alusta: tick on 0, autojen
 tunnisteet alkavat ykkösestä ja simulaatioaika alkaa maanantaista
 2026-01-05 kello 06:00. Jos tietokantaa ei tyhjennetä ajojen välillä, eri
 ajojen tapahtumat menevät päällekkäin samoille ajoille ja samoille
-auto-tunnisteille, eikä palvelu huomaa sitä. Tilastot (jos niitä lasketaan
-tallennetusta datasta) olisivat silloin virheellisiä. Siksi tietokanta
-nollataan ennen jokaista uutta ajoa.
- 
+auto-tunnisteille, eikä palvelu huomaa sitä. Palvelun tilastot lasketaan
+tallennetusta datasta, joten ne olisivat silloin virheellisiä. Siksi
+tietokanta nollataan ennen jokaista uutta ajoa.
+
 Pysäytä ensin palvelu (Ctrl+C sen terminaalissa) ja poista sitten
 tietokantatiedostot `service/`-kansiossa:
- 
+
     cd service
     Remove-Item traffic.db, traffic.db-wal, traffic.db-shm -ErrorAction SilentlyContinue
- 
+
 Komento on PowerShellille. Tietokanta koostuu kolmesta tiedostosta
-(`traffic.db` ja SQLiten WAL-tilan apufiletiedostot `-wal` ja `-shm`), ja
+(`traffic.db` ja SQLiten WAL-tilan aputiedostot `-wal` ja `-shm`), ja
 kaikki kolme poistetaan. `-ErrorAction SilentlyContinue` estää virheilmoituksen,
 jos jokin tiedostoista puuttuu. Käynnistä sitten palvelu uudelleen
 (`dotnet run`): se luo uuden, tyhjän tietokannan.
- 
+
 Nollaus tarvitaan myös silloin, kun taulun rakenne muuttuu, koska palvelu ei
 päivitä vanhaa taulua.
