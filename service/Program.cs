@@ -11,7 +11,10 @@ var connectionString = app.Configuration.GetConnectionString("Traffic") ?? "Data
 
 InitializeDatabase(connectionString);
 
-app.MapGet("/", () => "Hello World!");
+// Tarjoaa kansion wwwroot tiedostot. UseDefaultFiles ohjaa osoitteen / tiedostoon index.html,
+// ja UseStaticFiles lähettää tiedoston. Järjestyksellä on väliä: UseDefaultFiles ensin.
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.MapPost("/events", (EventDto e) =>
 {

@@ -16,7 +16,7 @@ Java-simulaatio  --HTTP + JSON-->  C#-palvelu  --SQL-->  SQLite
  
 ## Tila
  
-Simulaatio on valmis: autot ajavat kaksikaistaisessa ruudukossa liikennevaloissa, mittauspisteet tuottavat tapahtumia, ja palvelu tallentaa ne tietokantaan. Palvelun tallennus, tilastot ja automaattiset testit ovat valmiit. Työn alla on tilastojen katselu selaimessa. Tarkempi tila ja suunnitelma ovat tiedostossa docs/design.md.
+Simulaatio, palvelu ja katseluliittymä ovat valmiita: autot ajavat kaksikaistaisessa ruudukossa liikennevaloissa, mittauspisteet tuottavat tapahtumia, palvelu tallentaa ne tietokantaan ja laskee niistä tilastoja, ja tilastoja voi katsella selaimessa. Jäljellä on vuorokausirytmi simulaatioon (ruuhka-ajat). Tarkempi tila ja suunnitelma ovat tiedostossa docs/design.md.
  
 Kaikki toimii paikallisesti.
  
@@ -80,12 +80,15 @@ dotnet test
 
 Pysäytä palvelu (dotnet run) ennen testien ajoa, koska käynnissä oleva palvelu lukitsee käännettävän tiedoston. Testit käynnistävät palvelun itse muistissa ja käyttävät väliaikaista tietokantaa, joten ne eivät koske service/traffic.db-tiedostoon.
 
-## Tilastot
+## Tilastot ja katseluliittymä
 
-Palvelu laskee tallennetuista tapahtumista kaksi tilastoa, jotka voi avata selaimessa tai requests.http:llä:
+Kun palvelu ja simulaatio ovat käynnissä, avaa selaimessa osoite http://localhost:5256/ (dotnet run ei avaa selainta itse). Sivu näyttää pistekohtaisen yhteenvedon, ohitukset tunneittain viivakaaviona ja viimeisimmät tapahtumat, ja se päivittyy itsestään viiden sekunnin välein. Sivu ei käytä ulkoisia kirjastoja.
+
+Samat tiedot saa JSON-muodossa suoraan palvelusta:
 
 http://localhost:5256/stats/points – pistekohtainen yhteenveto (ohitukset, keskinopeus ja suuntajakauma)
 http://localhost:5256/stats/hourly – ohitusmäärät pisteittäin ja tunneittain simulaatioajan mukaan
+http://localhost:5256/events – 100 uusinta tapahtumaa
 
 Tilastot olettavat, että tietokanta sisältää yhden ajon, joten nollaa tietokanta ennen uutta ajoa (ks. "Tietokannan nollaus").
 

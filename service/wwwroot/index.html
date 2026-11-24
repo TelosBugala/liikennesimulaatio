@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Liikennetilastot</title>
+  <!-- Tyhjä kuvake estää selaimen turhan /favicon.ico-pyynnön (404) -->
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --fg: #1c2330;
+      --muted: #5d6778;
+      --line: #dde1e8;
+      --error: #b42318;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+
+    header, main { max-width: 60rem; margin: 0 auto; padding: 0 1rem; }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.5rem;
+      padding-top: 1.5rem;
+    }
+
+    h1 { margin: 0; font-size: 1.5rem; }
+    h2 { margin: 0 0 0.75rem; font-size: 1.1rem; }
+
+    #status { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    #status.error { color: var(--error); font-weight: 600; }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--line); text-align: left; }
+    th { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: none; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    
+    .chart { display: block; width: 100%; height: auto; }
+    .chart text { font-size: 12px; fill: var(--muted); }
+    .chart .grid { stroke: var(--line); stroke-width: 1; }
+    .chart .tick { stroke: var(--muted); stroke-width: 1; }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem 1.25rem;
+      margin: 0.75rem 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .swatch {
+      display: inline-block;
+      width: 0.9rem;
+      height: 0.9rem;
+      margin-right: 0.4rem;
+      border-radius: 2px;
+      vertical-align: -0.1rem;
+    }
+    .note { margin: 0.75rem 0 0; color: var(--muted); font-size: 0.85rem; }
+
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Liikennetilastot</h1>
+    <p id="status" role="status">Ladataan…</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Mittauspisteet</h2>
+      <p id="points-empty" hidden>Ei tapahtumia vielä.</p>
+      <div id="points-wrap" class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Piste</th>
+              <th class="num">Ohitukset</th>
+              <th class="num">Keskinopeus (km/h)</th>
+              <th class="num">Pohjoinen</th>
+              <th class="num">Itä</th>
+              <th class="num">Etelä</th>
+              <th class="num">Länsi</th>
+            </tr>
+          </thead>
+          <tbody id="points-body"></tbody>
+        </table>
+      </div>
+    </section>
+    
+    <section>
+      <h2>Ohitukset tunneittain</h2>
+      <p id="chart-empty" hidden>Ei tapahtumia vielä.</p>
+      <div id="chart-wrap">
+        <svg id="chart" class="chart" viewBox="0 0 800 320" role="img"
+             aria-label="Ohitukset tunneittain mittauspisteittäin"></svg>
+        <ul id="legend" class="legend"></ul>
+        <p class="note">Aika on simulaatioaikaa. Tunnit, joissa ei ollut ohituksia, näkyvät arvona 0.</p>
+      </div>
+    </section>
+
+    
+    <section>
+      <h2>Viimeisimmät tapahtumat</h2>
+      <p id="events-empty" hidden>Ei tapahtumia vielä.</p>
+      <div id="events-wrap" class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Simulaatioaika</th>
+              <th>Piste</th>
+              <th class="num">Auto</th>
+              <th>Suunta</th>
+              <th class="num">Nopeus (km/h)</th>
+            </tr>
+          </thead>
+          <tbody id="events-body"></tbody>
+        </table>
+      </div>
+      <p class="note">Lista on tallennusjärjestyksessä (uusin ylhäällä), joten simulaatioajat voivat olla hieman epäjärjestyksessä. Pisteen nimi on se, joka sillä oli tapahtumahetkellä.</p>
+    </section>
+
+  </main>
+
+  <script>
+    'use strict';
+
+    const REFRESH_MS = 5000;
+
+    const integerFormat = new Intl.NumberFormat('fi-FI');
+    const decimalFormat = new Intl.NumberFormat('fi-FI', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+    // Hakee JSONin palvelulta. Virhevastaus (esim. 500) muutetaan poikkeukseksi.
+    async function fetchJson(url) {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(url + ' vastasi ' + response.status);
+      }
+      return response.json();
+    }
+
+    function setStatus(text, isError) {
+      const status = document.getElementById('status');
+      status.textContent = text;
+      status.classList.toggle('error', isError);
+    }
+
+    // Lisää taulukon riville solun. Teksti asetetaan textContent-ominaisuudella, jotta sitä
+    // ei koskaan tulkita HTML:nä (suoja XSS:ää vastaan).
+    function addCell(row, text, isNumber) {
+      const cell = row.insertCell();
+      cell.textContent = text;
+      if (isNumber) {
+        cell.className = 'num';
+      }
+    }
+
+    function renderPointTable(points) {
+      document.getElementById('points-empty').hidden = points.length > 0;
+      document.getElementById('points-wrap').hidden = points.length === 0;
+
+      const body = document.getElementById('points-body');
+      body.replaceChildren();
+
+      for (const point of points) {
+        const row = body.insertRow();
+        addCell(row, point.pointName, false);
+        addCell(row, integerFormat.format(point.passCount), true);
+        addCell(row, decimalFormat.format(point.averageSpeedKmh), true);
+        addCell(row, integerFormat.format(point.directions.north), true);
+        addCell(row, integerFormat.format(point.directions.east), true);
+        addCell(row, integerFormat.format(point.directions.south), true);
+        addCell(row, integerFormat.format(point.directions.west), true);
+      }
+    }
+
+    
+    // ---------- Tuntikaavio ----------
+
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const CHART = { width: 800, height: 320, left: 48, right: 36, top: 12, bottom: 32 };
+    const SERIES_COLORS = ['#2563eb', '#d97706', '#059669', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d'];
+    const TICK_STEPS = [1, 2, 3, 6, 12, 24, 48, 96, 192, 384, 768, 1536, 3072];
+    const MAX_X_LABELS = 8;
+
+    // Luo SVG-elementin ja asettaa sille attribuutit.
+    function svgElement(name, attributes) {
+      const element = document.createElementNS(SVG_NS, name);
+      for (const [key, value] of Object.entries(attributes)) {
+        element.setAttribute(key, value);
+      }
+      return element;
+    }
+
+    // Pisteen väri määräytyy tunnisteesta, joten väri pysyy samana päivityksestä toiseen.
+    function colorOf(pointId) {
+      return SERIES_COLORS[(pointId - 1) % SERIES_COLORS.length];
+    }
+
+    // "2026-01-05T06:00:00" -> tuntien määrä ajanlaskun alusta. Simulaatioaika on ilman
+    // aikavyöhykettä, joten se käsitellään UTC:nä ja mitään aikavyöhykemuunnoksia ei tehdä.
+    function hourIndex(hourStart) {
+      const year = Number(hourStart.slice(0, 4));
+      const month = Number(hourStart.slice(5, 7));
+      const day = Number(hourStart.slice(8, 10));
+      const hour = Number(hourStart.slice(11, 13));
+      return Date.UTC(year, month - 1, day, hour) / 3600000;
+    }
+
+    // Tuntinumero -> "5.1. 06:00".
+    function formatHour(index) {
+      const date = new Date(index * 3600000);
+      const hours = String(date.getUTCHours()).padStart(2, '0');
+      return date.getUTCDate() + '.' + (date.getUTCMonth() + 1) + '. ' + hours + ':00';
+    }
+
+    // Ryhmittelee rivit pisteittäin ja laskee kaavion tarvitsemat ääriarvot.
+    function buildSeries(rows) {
+      const byPoint = new Map();
+      let minHour = Infinity;
+      let maxHour = -Infinity;
+      let maxCount = 0;
+
+      for (const row of rows) {
+        if (!byPoint.has(row.pointId)) {
+          byPoint.set(row.pointId, { pointId: row.pointId, name: row.pointName, counts: new Map() });
+        }
+        const hour = hourIndex(row.hourStart);
+        byPoint.get(row.pointId).counts.set(hour, row.passCount);
+        minHour = Math.min(minHour, hour);
+        maxHour = Math.max(maxHour, hour);
+        maxCount = Math.max(maxCount, row.passCount);
+      }
+
+      const series = [...byPoint.values()].sort((a, b) => a.pointId - b.pointId);
+      return { series, minHour, maxHour, maxCount };
+    }
+
+    // Y-akselin väli: 1, 2 tai 5 kertaa kymmenen potenssi, vähintään 1 (ohitukset ovat kokonaislukuja).
+    function niceStep(maxValue) {
+      const target = maxValue / 4;
+      const magnitude = Math.pow(10, Math.floor(Math.log10(target)));
+      const fraction = target / magnitude;
+      const nice = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10;
+      return Math.max(1, nice * magnitude);
+    }
+
+    // X-akselin otsikoiden väli tunteina niin, ettei otsikoita tule liikaa.
+    function hourTickStep(hourCount) {
+      for (const step of TICK_STEPS) {
+        if (Math.ceil(hourCount / step) <= MAX_X_LABELS) {
+          return step;
+        }
+      }
+      return TICK_STEPS[TICK_STEPS.length - 1];
+    }
+
+    function renderChart(rows) {
+      document.getElementById('chart-empty').hidden = rows.length > 0;
+      document.getElementById('chart-wrap').hidden = rows.length === 0;
+      if (rows.length === 0) {
+        return;
+      }
+
+      const { series, minHour, maxHour, maxCount } = buildSeries(rows);
+      const hourCount = maxHour - minHour + 1;
+      const yStep = niceStep(maxCount);
+      const yMax = Math.ceil(maxCount / yStep) * yStep;
+
+      const plotWidth = CHART.width - CHART.left - CHART.right;
+      const plotHeight = CHART.height - CHART.top - CHART.bottom;
+      const plotBottom = CHART.top + plotHeight;
+
+      // Arvo -> SVG-koordinaatti. SVG:n origo on vasemmassa yläkulmassa ja y kasvaa alaspäin.
+      const xOf = (hour) => hourCount === 1
+        ? CHART.left + plotWidth / 2
+        : CHART.left + (hour - minHour) / (hourCount - 1) * plotWidth;
+      const yOf = (value) => plotBottom - value / yMax * plotHeight;
+
+      const svg = document.getElementById('chart');
+      svg.replaceChildren();
+
+      // Vaaka-apuviivat ja y-akselin arvot
+      for (let value = 0; value <= yMax; value += yStep) {
+        const y = yOf(value);
+        svg.append(svgElement('line', { class: 'grid', x1: CHART.left, x2: CHART.width - CHART.right, y1: y, y2: y }));
+        const label = svgElement('text', { x: CHART.left - 6, y: y + 4, 'text-anchor': 'end' });
+        label.textContent = value;
+        svg.append(label);
+      }
+
+      // X-akselin merkit ja otsikot (tasatunnit, jotka ovat tickStepin monikertoja)
+      const tickStep = hourTickStep(hourCount);
+      for (let hour = Math.ceil(minHour / tickStep) * tickStep; hour <= maxHour; hour += tickStep) {
+        const x = xOf(hour);
+        svg.append(svgElement('line', { class: 'tick', x1: x, x2: x, y1: plotBottom, y2: plotBottom + 4 }));
+        const label = svgElement('text', { x: x, y: plotBottom + 18, 'text-anchor': 'middle' });
+        label.textContent = formatHour(hour);
+        svg.append(label);
+      }
+
+      // Yksi viiva per piste. Tunnit, joista pisteellä ei ole riviä, piirretään arvolla 0.
+      for (const s of series) {
+        const color = colorOf(s.pointId);
+        const coordinates = [];
+        for (let hour = minHour; hour <= maxHour; hour++) {
+          coordinates.push(xOf(hour).toFixed(1) + ',' + yOf(s.counts.get(hour) ?? 0).toFixed(1));
+        }
+        svg.append(svgElement('polyline', {
+          points: coordinates.join(' '),
+          fill: 'none',
+          stroke: color,
+          'stroke-width': 2,
+          'stroke-linejoin': 'round',
+        }));
+
+        // Yhden tunnin data ei muodosta viivaa, joten piirretään piste.
+        if (hourCount === 1) {
+          svg.append(svgElement('circle', { cx: xOf(minHour), cy: yOf(s.counts.get(minHour) ?? 0), r: 4, fill: color }));
+        }
+      }
+
+      // Selite
+      const legend = document.getElementById('legend');
+      legend.replaceChildren();
+      for (const s of series) {
+        const item = document.createElement('li');
+        const swatch = document.createElement('span');
+        swatch.className = 'swatch';
+        swatch.style.background = colorOf(s.pointId);
+        item.append(swatch, s.name);
+        legend.append(item);
+      }
+    }
+
+    // ---------- Viimeisimmät tapahtumat ----------
+
+    const EVENT_ROWS = 20;
+    const DIRECTION_NAMES = { NORTH: 'Pohjoinen', EAST: 'Itä', SOUTH: 'Etelä', WEST: 'Länsi' };
+
+    // /events palauttaa 100 uusinta tapahtumaa, joista näytetään EVENT_ROWS uusinta.
+    function renderEventTable(events) {
+      const shown = events.slice(0, EVENT_ROWS);
+      document.getElementById('events-empty').hidden = shown.length > 0;
+      document.getElementById('events-wrap').hidden = shown.length === 0;
+
+      const body = document.getElementById('events-body');
+      body.replaceChildren();
+
+      for (const entry of shown) {
+        const row = body.insertRow();
+        addCell(row, entry.simTime.replace('T', ' '), false);
+        addCell(row, entry.pointName, false);
+        addCell(row, String(entry.carId), true);
+        addCell(row, DIRECTION_NAMES[entry.direction] ?? entry.direction, false);
+        addCell(row, integerFormat.format(entry.speedKmh), true);
+      }
+    }
+
+    // Hakee tiedot ja päivittää sivun. Virhe näytetään sivulla, ja vanhat tiedot jäävät näkyviin.
+    async function refresh() {
+      try {
+        const [points, hourly, events] = await Promise.all([
+          fetchJson('/stats/points'),
+          fetchJson('/stats/hourly'),
+          fetchJson('/events'),
+        ]);
+        renderPointTable(points);
+        renderChart(hourly);
+        renderEventTable(events);
+        setStatus('Päivitetty klo ' + new Date().toLocaleTimeString('fi-FI'), false);
+      } catch (error) {
+        setStatus('Tietojen haku epäonnistui: ' + error.message + '. Yritetään uudelleen.', true);
+      }
+    }
+
+    // Seuraava päivitys ajastetaan vasta, kun edellinen on valmis. Näin pyynnöt eivät
+    // kasaannu, jos palvelu vastaa hitaasti (setInterval ei odottaisi).
+    async function refreshLoop() {
+      await refresh();
+      setTimeout(refreshLoop, REFRESH_MS);
+    }
+
+    refreshLoop();
+  </script>
+</body>
+</html>

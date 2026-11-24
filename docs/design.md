@@ -26,6 +26,7 @@ Tiedonkulku on yksisuuntainen: simulaatio lähettää tapahtumia, palvelu tallen
 | Palvelu | `service/` | C#, ASP.NET Core minimal API (.NET 10) |
 | Tietokanta | `service/traffic.db` (sekä `-wal` ja `-shm`) | SQLite, ei versionhallinnassa |
 | Palvelun testit | `service.Tests/` | C#, xUnit, WebApplicationFactory |
+| Katseluliittymä | `service/wwwroot/index.html` | HTML, CSS, JavaScript ja SVG (ei kirjastoja) |
 
 ## Java-luokat
  
@@ -99,6 +100,10 @@ json
 ]
 
 hourStart on tunnin alku simulaatioaikana (ISO 8601, ilman aikavyöhykettä). Eri päivien samat kellonajat ovat eri rivejä. Tunnit, joissa ei ollut ohituksia, eivät ole mukana. pointName on sama uusin nimi kuin pistekohtaisessa yhteenvedossa.
+
+### GET /
+
+Palauttaa katseluliittymän, eli staattisen HTML-sivun (service/wwwroot/index.html). Sivu hakee datansa palvelun omilta osoitteilta (/stats/points, /stats/hourly ja /events).
 
 ## Tietokanta
  
@@ -186,6 +191,18 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Keskinopeus on ohitusten nimellisnopeuksien keskiarvo.** Se pyöristetään yhteen desimaaliin SQL:ssä.
 - **Indeksin riittävyys mitattiin.** Kyselyt ajettiin väliaikaisella testillä 200 000 tekaistulla tapahtumalla (3 pistettä ja noin 28 tuntia simulaatioaikaa, eli 84 pisteen ja tunnin yhdistelmää), ja testi poistettiin mittauksen jälkeen. Indeksin `(point_id, sim_time)` kanssa pistekohtainen yhteenveto kesti noin 90–100 ms ja tuntikohtainen noin 160–190 ms. Ilman indeksiä ajat olivat noin 140–150 ms ja noin 2,1–2,3 s. Ero on suurin tuntikyselyssä ja tulee pisteen nimen alikyselystä: indeksin kanssa se hakee pisteen rivit suoraan (`SEARCH ... point_id=?`), ilman indeksiä se lukee koko taulun jokaiselle ryhmälle erikseen (tuntikyselyssä 84 kertaa). **Päätös: nykyinen indeksi riittää, eikä lisäindeksejä tehdä.** Jokainen lisäindeksi hidastaisi jokaista kirjoitusta (palvelu vastaanottaa kymmeniä tapahtumia sekunnissa nopeudella 32x), eikä tarve ole osoitettu. Mittaus on tehty tekaistulla datalla yhdellä koneella ilman rinnakkaisia pyyntöjä.
 
+### Katseluliittymä
+
+- **Sivu on yksi staattinen tiedosto.** service/wwwroot/index.html, jossa tyylit ja skripti ovat samassa tiedostossa. Palvelu tarjoaa sen UseDefaultFiles- ja UseStaticFiles-väliohjelmistoilla. Aiempi MapGet("/")-reitti (Hello World) poistettiin, koska reitti olisi ohittanut staattisen tiedoston.
+- **Ei ulkoisia kirjastoja eikä verkkopalveluja.** Sivu käyttää pelkkää JavaScriptiä ja SVG:tä. Testi varmistaa, ettei sivulla ole ulkoisia viittauksia.
+- **Sivu hakee datan palvelun omilta osoitteilta.** (fetch), joten se on samaa alkuperää eikä CORS-asetuksia tarvita.
+- **Automaattinen päivitys 5 sekunnin välein.** Seuraava päivitys ajastetaan vasta edellisen valmistuttua (setTimeout, ei setInterval), jotta pyynnöt eivät kasaannu palvelun ollessa hidas. Virhetilanteessa sivu näyttää virheilmoituksen, vanha data jää näkyviin ja sivu yrittää uudelleen.
+- **ekstit kirjoitetaan textContentilla tai appendilla,** Sei innerHTML:llä, jotta data ei voi tulla tulkituksi HTML:nä (XSS-suoja).
+- **Tuntikaavio on viivakaavio,** jossa on yksi viiva per piste ja selite, piirretty SVG:llä. Tunnit, joissa ei ollut ohituksia, piirretään arvolla 0. X-akselin otsikoita on enintään kahdeksan. Viivan väri määräytyy pisteen tunnisteesta (kahdeksan väriä, jonka jälkeen värit toistuvat).
+- **Tapahtumataulukossa on 20 uusinta tapahtumaa.** tallennusjärjestyksessä (uusin ylhäällä). Pisteen nimi on se, joka sillä oli tapahtumahetkellä.
+- **Ulkoasu on selkeä ja neutraali.** (vaalea tausta, järjestelmän kirjasin, värit CSS-muuttujina).
+- **JavaScriptille ei ole automaattisia testejä.** Se vaatisi Noden ja npm:n, eikä sitä oteta käyttöön ("pieni ensimmäinen versio"). Sivu testataan selaimessa käsin, ja palvelun testit varmistavat vain, että sivu tarjotaan ja että se on omavarainen.
+
 ### Testit
 
 - **Testit ajetaan HTTP:n kautta.** Testi käynnistää palvelun muistissa (`WebApplicationFactory<Program>`, ei oikeaa porttia), lähettää pyyntöjä ja tarkistaa vastaukset. Näin testataan koko ketju (validointi, SQLite, vastaus) samalla tavalla kuin simulaatio sitä käyttää. Validointi ei ole erillisessä luokassa, koska erillinen yksikkötestaus ei tuonut tarpeeseen nähden lisäarvoa.
@@ -196,17 +213,19 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 - **Testit ajetaan komennolla `dotnet test` kansiossa `service.Tests/`.** Palvelu pitää pysäyttää ensin, koska muuten käynnissä oleva palvelu lukitsee käännettävän tiedoston.
 - **Testit tarkistavat virheilmoitusten tarkan tekstin.** Siksi ilmoitusta muutettaessa testi pitää päivittää.
 
-## Suunnitellut ratkaisut (vaihe 6D–6E, päätetty, ei vielä toteutettu))
+## Suunnitellut ratkaisut (vaihe 6E, päätetty, ei vielä toteutettu))
  
-- **Katseluliittymä on yksi HTML-sivu**, jota palvelu tarjoaa osoitteessa `/`. Se käyttää pelkkää JavaScriptiä ja SVG:tä, ei ulkoisia kirjastoja eikä verkkopalveluja.
 - **Tilastot olettavat, että tietokanta sisältää yhden ajon.** Tietokanta nollataan ajojen välillä (ks. Tehdyt päätökset).
 - **Vuorokausirytmi tehdään viimeisenä.** Nyt syntymisväli on tasainen, joten tuntikohtainen kaavio on aluksi tasainen. Ruuhka-ajat lisätään simulaatioon vasta, kun tilastot on nähty (vaihe 6E).
 ## Tunnetut rajoitukset
  
 - **Ajojen sekoittuminen.** Jos tietokantaa ei nollata ajojen välillä, eri ajojen tapahtumat sekoittuvat samoille simulaatioajoille ja carId:t toistuvat, eikä palvelu huomaa sitä.
 - **Tilastokyselyt lukevat koko taulun,** joten niiden kesto kasvaa suunnilleen rivimäärän mukana (200 000 rivillä alle 0,2 s). Tuloksia ei välimuistiteta. Jos data kasvaa moninkertaiseksi, ratkaisuksi tulee silloin harkita esimerkiksi esilaskettuja yhteenvetoja.
+- **Kaavio näyttää kaikki tunnit eikä rajaa aikaväliä,** joten hyvin pitkässä ajossa (satoja tunteja) viivat tihenevät. Värejä on kahdeksan, joten yli kahdeksalla pisteellä värit toistuvat.
+- **Tapahtumalista on tallennusjärjestyksessä,** joten simulaatioajat voivat olla hieman epäjärjestyksessä (tapahtumat lähetetään asynkronisesti).
 - **Jumiutumisriski.** Kun autoja on paljon, ne voivat jonottaa ristiin niin, ettei kukaan pääse liikkeelle. Valot, rajoitettu syntymisväli ja "älä tuki risteystä" -sääntö vähentävät riskiä. Jos jumiutumista esiintyy, se ratkaistaan silloin.
 - **Nopeus tapahtumassa on nimellisnopeus, ei hetkellisnopeus.** Arvoja on vain kolme (50, 25 ja 17 km/h), joten keskinopeudet ovat sekoitus näistä.
+
 ## Väliaikaiset ratkaisut
  
 Ei väliaikaisia ratkaisuja.
@@ -221,8 +240,9 @@ Valmista:
  
 - C#-palvelu: `POST /events`, `GET /events`, SQLite-tallennus (WAL-tila).
 - C#-palvelu: tapahtuman kaikki kentät (sim_time, point_name ja speed_kmh) tallentuvat, palvelu validoi ne ja tauluun on indeksi (point_id, sim_time).
-- C#-palvelun automaattiset testit (xUnit, 87 testiä): vastaanotto, haku, kaikki tarkistukset ja tilastot.
+- C#-palvelun automaattiset testit (xUnit, 89 testiä): vastaanotto, haku, kaikki tarkistukset, tilastot ja sivun tarjoaminen
 - C#-palvelu: tilastot GET /stats/points (ohitukset, keskinopeus, suuntajakauma) ja GET /stats/hourly (ohitukset tunneittain), laskettu SQL:llä simulaatioajan mukaan.
+- C#-palvelu: katseluliittymä osoitteessa / (pistetaulukko, tuntikaavio ja viimeisimmät tapahtumat, päivittyy automaattisesti 5 sekunnin välein).
 - Java: ikkuna, joka piirtää kaupungin ruudukon (12 × 9 ruutua, kartta tekstirivinä).
 - Java: kaksikaistaiset tiet, oikeanpuoleinen liikenne ja kaistaviiva.
 - Java: autot syntyvät satunnaisesti kartan reunoilla, saavat satunnaisen määränpään ja lyhimmän reitin (`RoutePlanner`, leveyshaku), kääntyvät risteyksissä reitin mukaan ja poistuvat määränpäässään.
@@ -232,16 +252,14 @@ Valmista:
 - Java: mittauspisteillä on nimet, ja ne piirretään kartalle. Pisteitä voi lisätä, nimetä uudelleen ja poistaa hiirellä ohjelman käydessä, ja ne tallentuvat tiedostoon ja latautuvat käynnistyksessä.
 - Java: `EventSender` lähettää tapahtumat (mukana `simTime`, `pointName` ja `speedKmh`) palvelulle, ja ne tallentuvat tietokantaan. Koko ketju Java → HTTP → C# → SQLite toimii.
 
-Simulaatio, palvelun tallennus, tilastot ja palvelun testit ovat valmiita. Jäljellä on katseluliittymä.
- 
+Simulaatio, palvelu (tallennus, tilastot, testit) ja katseluliittymä ovat valmiita. Jäljellä on vuorokausirytmi simulaatioon (6E).
+
 ## Seuraavat vaiheet
  
-Vaiheet 1–5 ja 6A-6C on tehty.
+Vaiheet 1–5 ja 6A-6D on tehty.
  
 6. **Tietojen käsittely ja esitys.** Kukin osa kokeillaan ja commitoidaan erikseen:
 
-   - 6C. Tilastot: pistekohtainen yhteenveto ja tuntikohtaiset ohitusmäärät SQL-kyselyinä, testeineen.
-   - 6D. Katseluliittymä: yksi HTML-sivu osoitteessa `/` (yhteenvetotaulukko, tuntikaavio ja viimeisimmät tapahtumat).
    - 6E. Vuorokausirytmi simulaatioon (ruuhka-ajat), kun tilastot on nähty.
 ## Ei tehdä
  
