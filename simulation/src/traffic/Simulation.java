@@ -14,6 +14,16 @@ public class Simulation {
     private static final int MAX_SPAWN_DELAY = 20;
     private static final int MAX_MOVE_EVERY_TICKS = 3;
 
+    // Liikenteen tiheys tunneittain (kellonaika 0–23) suhteessa perustasoon 1,0.
+    // Perustasolla syntymisväli on 5–20 tickiä, ja kerroin 2,0 tekee liikenteestä
+    // kaksi kertaa tiheämpää.
+    private static final double[] TRAFFIC_BY_HOUR = {
+        0.3, 0.2, 0.2, 0.2, 0.3, 0.5,   // 00–05 yö
+        1.0, 2.0, 2.5, 1.5, 1.0, 1.0,   // 06–11 aamuruuhka klo 7–9
+        1.2, 1.0, 1.0, 1.5, 2.5, 2.5,   // 12–17 iltapäiväruuhka klo 16–18
+        1.5, 1.0, 0.8, 0.6, 0.4, 0.3    // 18–23 ilta
+    };
+
     private final CityMap map;
     private final Consumer<PassEvent> eventListener;
     private final Random random = new Random();
@@ -134,7 +144,9 @@ public class Simulation {
     }
 
     private int nextSpawnDelay() {
-        return MIN_SPAWN_DELAY + random.nextInt(MAX_SPAWN_DELAY - MIN_SPAWN_DELAY + 1);
+        int base = MIN_SPAWN_DELAY + random.nextInt(MAX_SPAWN_DELAY - MIN_SPAWN_DELAY + 1);
+        double intensity = TRAFFIC_BY_HOUR[SimTime.at(tick).getHour()];
+        return Math.max(1, (int) Math.round(base / intensity));
     }
 
     private void reportPassings(Car car) {

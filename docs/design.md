@@ -173,7 +173,8 @@ Taulu luodaan palvelun käynnistyessä, jos sitä ei ole. Taulun rakenteen muutt
 
 ### Liikenne
 
-- **Autot syntyvät kartan reunoilla ja poistuvat määränpäässään.** Syntymispisteet löytyvät kartasta automaattisesti: reunalla oleva tieruutu, jonka suunta on reunasta sisäänpäin (nykyisellä kartalla kahdeksan). Syntymisväli on satunnainen (5–20 tickiä) ja tasainen, eli se ei riipu kellonajasta. Piste arvotaan, ja jos kaista on varattu, syntyminen odottaa seuraavaan tickiin. Auto poistuu, kun se on ajanut reittinsä loppuun. Jokainen auto saa juoksevan tunnisteen.
+- **Autot syntyvät kartan reunoilla ja poistuvat määränpäässään.** Syntymispisteet löytyvät kartasta automaattisesti: reunalla oleva tieruutu, jonka suunta on reunasta sisäänpäin (nykyisellä kartalla kahdeksan). Perussyntymisväli on satunnainen (5–20 tickiä), ja sitä muutetaan kellonajan mukaan (ks. Vuorokausirytmi). Piste arvotaan, ja jos kaista on varattu, syntyminen odottaa seuraavaan tickiin. Auto poistuu, kun se on ajanut reittinsä loppuun. Jokainen auto saa juoksevan tunnisteen.
+- **Vuorokausirytmi.** Liikenteen tiheys riippuu simulaatioajan tunnista. Taulukko `TRAFFIC_BY_HOUR` (`Simulation.java`) antaa jokaiselle tunnille (0–23) kertoimen, jolla perussyntymisväli jaetaan: kerroin 2,0 tekee liikenteestä kaksi kertaa tiheämpää. Aamuruuhka on klo 7–9 ja iltapäiväruuhka klo 16–18 (huippukerroin 2,5), päivällä kerroin on noin 1,0 ja yöllä 0,2–0,3. Kertoimien keskiarvo on noin 1,0, joten vuorokauden autojen kokonaismäärä pysyy suunnilleen entisellään. Joka päivä on samanlainen (viikonloppuja ei erotella). Syntymisväli lasketaan tickiä kohden kokonaislukuna, ja se on vähintään yksi tick.
 - **Auto saa reitin syntyessään.** Määränpää on jokin muu syntymispiste, ja reitti lasketaan kerran `RoutePlanner`illa. Reittiä ei muuteta kesken matkan, eikä auto väistä ruuhkaa. Käännökset tulevat reitistä. Auton `direction` on viimeisin ajosuunta, ja käännös näkyy kaistan vaihtumisena risteyksen jälkeen.
 - **Reitti haetaan leveyshaulla (BFS) ja se on lista suuntia.** Naapureiden järjestys arvotaan joka haulla, joten samanpituisista reiteistä valitaan satunnainen. Reitittömyys palautetaan arvona `null`.
 - **Liikenne on oikeanpuoleista.** Auto ajaa ajosuuntansa oikealla puolella ja piirretään sinne (siirtymä `LANE_OFFSET`). Kaistojen välissä on katkoviiva.
@@ -274,14 +275,13 @@ Valmista:
 - Java: simulaatiolla on oma aika (yksi tick on 5 sekuntia), joka näkyy ikkunan yläpalkissa, ja nopeutta voi säätää (Pause, Slower ja Faster, 0,5x–32x).
 - Java: mittauspisteillä on nimet, ja ne piirretään kartalle. Pisteitä voi lisätä, nimetä uudelleen ja poistaa hiirellä ohjelman käydessä, ja ne tallentuvat tiedostoon ja latautuvat käynnistyksessä.
 - Java: `EventSender` lähettää tapahtumat (mukana `simTime`, `pointName` ja `speedKmh`) palvelulle, ja ne tallentuvat tietokantaan. Koko ketju Java → HTTP → C# → SQLite toimii.
+- Java: autojen syntymistiheys riippuu kellonajasta (aamu- ja iltapäiväruuhka).
 
-Ohjelma on tässä tilassa kokonaan valmis ja toimiva. Autoja syntyy tasaisesti, joten tuntikaavion viivat ovat suunnilleen tasaisia. Vuorokausirytmi (6E) ei ole mukana (ks. Jatko).
+Ohjelma on tässä tilassa kokonaan valmis ja toimiva. Autojen syntymistiheys noudattaa vuorokausirytmiä (aamu- ja iltapäiväruuhka, hiljainen yö), joten tuntikaaviossa näkyvät ruuhkahuiput.
 
 ## Jatko
 
-Vaiheet 1–5 (simulaatio) ja 6A–6D (palvelu) on tehty. Jäljellä on yksi valinnainen lisä:
-
-- **6E. Vuorokausirytmi simulaatioon (valinnainen).** Nyt syntymisväli on tasainen (5–20 tickiä), joten tuntikaavio on tasainen. Vaihe lisäisi ruuhka-ajat, eli syntymisväli riippuisi kellonajasta, jotta kaavioita olisi mielenkiintoisempaa seurata. Se ei ole ohjelman toiminnan kannalta tarpeellinen, eikä se muuta palvelua tai rajapintaa: muutokset kohdistuvat vain simulaatioon (`Simulation.nextSpawnDelay()` ja tarvittaessa `SimTime`). Se tehdään erillisenä muutoksena tämän valmiin version jälkeen, joten tämä versio sopii pohjaksi, jos haluaa tehdä omat simulaatiomuutoksensa.
+Vaiheet 1–6 on tehty, eikä jatkovaiheita ole suunniteltu. Vuorokausirytmi (6E) lisättiin viimeisenä, ja ennen sitä oleva versio on merkitty tagilla `v1.0`.
 
 ## Ei tehdä
 
