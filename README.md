@@ -21,11 +21,10 @@ Ohjelma on valmis ja toimiva: autot ajavat kaksikaistaisessa ruudukossa
 liikennevaloissa, mittauspisteet tuottavat tapahtumia, palvelu tallentaa ne
 tietokantaan ja laskee niistä tilastoja, ja tilastoja voi katsella selaimessa.
 
-Autoja syntyy tasaisesti, joten tuntikaavion viivat ovat suunnilleen
-tasaisia. Vuorokausirytmi (ruuhka-ajat) on suunniteltu valinnaiseksi lisäksi,
-jonka ainoa tarkoitus on tehdä kaavioista mielenkiintoisempia. Se ei ole
-mukana tässä versiossa. Tarkempi tila ja suunnitelma ovat tiedostossa
-`docs/design.md`.
+Autojen syntymistiheys noudattaa vuorokausirytmiä (aamu- ja iltapäiväruuhka,
+hiljainen yö), joten tuntikaaviossa näkyvät ruuhkahuiput. Simulaation
+nopeuden ollessa 32x yksi vuorokausi kuluu noin kahdessa minuutissa. Tarkempi
+kuvaus rakenteesta ja tehdyistä päätöksistä on tiedostossa `docs/design.md`.
 
 Kaikki toimii paikallisesti.
 
